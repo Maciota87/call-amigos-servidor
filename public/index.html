@@ -36,11 +36,11 @@
       align-items: center;
       justify-content: center;
       gap: 14px;
+      flex-wrap: wrap;
     }
-    .logo-img {
-      width: 110px;
+    .logo svg {
+      width: 86px;
       height: auto;
-      border-radius: 16px;
       filter: drop-shadow(0 6px 12px rgba(0,0,0,.4));
     }
     h1 {
@@ -65,7 +65,7 @@
     }
     .card label { font-size: .9rem; opacity: .85; }
 
-    input {
+    input, select {
       padding: 12px 14px;
       border-radius: 12px;
       border: 2px solid transparent;
@@ -75,7 +75,7 @@
       outline: none;
       transition: border-color .2s;
     }
-    input:focus { border-color: var(--lilas-claro); }
+    input:focus, select:focus { border-color: var(--lilas-claro); }
 
     .btn {
       padding: 12px 18px;
@@ -96,9 +96,26 @@
     .btn.big { padding: 15px; font-size: 1.1rem; }
     .btn.ativo { background: var(--lilas); color: #1a0b2e; }
 
+    select.btn-select {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #4a3a63;
+      color: var(--branco);
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+    }
+
     #call {
       padding: 0 14px 20px;
       animation: subir .4s ease;
+    }
+    #status {
+      text-align: center;
+      margin: 14px 0 0;
+      font-size: .95rem;
+      opacity: .85;
     }
     #grid {
       display: flex;
@@ -172,6 +189,7 @@
     #controls {
       display: flex;
       justify-content: center;
+      align-items: center;
       flex-wrap: wrap;
       gap: 10px;
       margin-top: 18px;
@@ -190,16 +208,13 @@
     @media (max-width: 600px) {
       .tile { flex: 0 0 150px; }
       .tile.focus { height: 45vh; }
-      .logo-img { width: 70px; }
+      .logo svg { width: 64px; }
     }
   </style>
 </head>
 <body>
   <header>
     <div class="logo">
-      <img src="mdb.png" alt="Logo MDB" class="logo-img">
-      <h1>Morro do Bingão</h1>
-    </div>
       <svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" aria-label="Logo MDB">
         <defs>
           <linearGradient id="morro" x1="0" y1="0" x2="0" y2="1">
@@ -224,16 +239,25 @@
   </section>
 
   <section id="call" hidden>
+    <p id="status">Conectando...</p>
     <div id="grid"></div>
 
     <nav id="controls">
       <button id="micBtn" class="btn" onclick="toggleMic(this)">🎤 Desligar microfone</button>
       <button id="shareBtn" class="btn destaque" onclick="toggleShare()">🖥️ Compartilhar tela</button>
+      <select id="resolucao" class="btn-select" onchange="mudarResolucao(this.value)" title="Resolução da tela compartilhada">
+        <option value="720">720p · 60 fps</option>
+        <option value="1080" selected>1080p · 60 fps</option>
+        <option value="1440">1440p · 60 fps</option>
+        <option value="2160">4K · 60 fps</option>
+        <option value="original">Original · 60 fps</option>
+      </select>
       <button id="fullBtn" class="btn" onclick="toggleFull()">⛶ Tela cheia</button>
+      <button class="btn" onclick="ativarSom()">🔊 Ativar som</button>
       <button class="btn danger" onclick="location.reload()">📞 Sair da chamada</button>
     </nav>
 
-    <p class="dica">Clique em um vídeo para colocá-lo em destaque.</p>
+    <p class="dica">Clique em um vídeo para colocá-lo em destaque. Se não ouvir ninguém, clique em "Ativar som".</p>
   </section>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -244,12 +268,38 @@
     let micTrack = null;
     let screenTrack = null;
     let meVideo = null;
+    let resAtual = '1080';
 
-    // Qualidade alvo para a tela compartilhada: 60 fps, priorizando fluidez
     const FPS_ALVO = 60;
-    const BITRATE_MAX = 6000000; // 6 Mbps
+
+    // Resolução e bitrate máximo para cada opção
+    const RESOLUCOES = {
+      '720':      { w: 1280, h: 720,  bitrate: 4000000 },
+      '1080':     { w: 1920, h: 1080, bitrate: 8000000 },
+      '1440':     { w: 2560, h: 1440, bitrate: 12000000 },
+      '2160':     { w: 3840, h: 2160, bitrate: 20000000 },
+      'original': { w: null, h: null, bitrate: 20000000 },
+    };
 
     const $ = (id) => document.getElementById(id);
+
+    function restricoesVideo() {
+      const r = RESOLUCOES[resAtual];
+      const v = { frameRate: { ideal: FPS_ALVO, max: FPS_ALVO } };
+      if (r.w) {
+        v.width = { ideal: r.w };
+        v.height = { ideal: r.h };
+      }
+      return v;
+    }
+
+    function atualizarStatus() {
+      const conectados = [...peers.values()].filter((p) => p.pc.connectionState === 'connected').length;
+      const total = peers.size;
+      $('status').textContent = total === 0
+        ? 'Sala aberta. Esperando seus amigos entrarem...'
+        : `Conectados: ${conectados} de ${total} amigo(s)`;
+    }
 
     function addTile(id, name, muted = false) {
       const div = document.createElement('div');
@@ -281,19 +331,28 @@
       if (div) div.classList.toggle('sem-video', !temVideo);
     }
 
-    // Pede ao navegador para enviar a tela com a maior taxa de quadros possível
+    // Ajusta bitrate e taxa de quadros do envio de tela
     function ajustarQualidade(sender) {
       if (!sender || !sender.track || sender.track.kind !== 'video') return;
       try {
         const params = sender.getParameters();
         if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
-        params.encodings[0].maxBitrate = BITRATE_MAX;
+        params.encodings[0].maxBitrate = RESOLUCOES[resAtual].bitrate;
         params.encodings[0].maxFramerate = FPS_ALVO;
         params.degradationPreference = 'maintain-framerate';
         sender.setParameters(params).catch(() => {});
       } catch (e) {
-        // Alguns navegadores só aceitam isso depois da negociação; tudo bem ignorar
+        // Ignora: alguns navegadores só aceitam depois da negociação
       }
+    }
+
+    // Tenta tocar todos os vídeos e áudios (libera o som no navegador)
+    function ativarSom() {
+      document.querySelectorAll('video').forEach((v) => {
+        if (v.muted) return;
+        v.play().catch(() => {});
+      });
+      document.querySelectorAll('audio').forEach((a) => a.play().catch(() => {}));
     }
 
     async function join() {
@@ -302,15 +361,19 @@
       if (!room || !name) return alert('Preencha o nome da sala e o seu nome.');
 
       try {
-        const mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const mic = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: false,
+        });
         micTrack = mic.getAudioTracks()[0];
-      } catch {
-        alert('Não consegui acessar o microfone. Você vai ouvir, mas não vai conseguir falar.');
+      } catch (e) {
+        alert('Não consegui acessar o microfone. Libere a permissão do microfone no navegador e entre de novo. Por enquanto você vai ouvir, mas não vai conseguir falar.');
       }
 
       $('setup').hidden = true;
       $('call').hidden = false;
       meVideo = addTile('me', name + ' (você)', true);
+      atualizarStatus();
 
       socket.emit('join-room', room, name);
     }
@@ -332,9 +395,10 @@
       };
       peers.set(id, peer);
 
-      if (micTrack) audioSender.replaceTrack(micTrack);
+      // Envia o microfone para o amigo (sempre que disponível)
+      if (micTrack) audioSender.replaceTrack(micTrack).catch(() => {});
       if (screenTrack) {
-        videoSender.replaceTrack(screenTrack);
+        videoSender.replaceTrack(screenTrack).catch(() => {});
         ajustarQualidade(videoSender);
       }
 
@@ -344,10 +408,9 @@
       pc.ontrack = ({ track }) => {
         remote.addTrack(track);
         if (track.kind === 'video') marcarComVideo(id, true);
-        track.onmute = () => marcarComVideo(id, false);
-        track.onunmute = () => marcarComVideo(id, true);
-        // Garante que o áudio e o vídeo recebidos comecem a tocar
-        document.querySelectorAll('video').forEach((v) => v.play().catch(() => {}));
+        track.onmute = () => { if (track.kind === 'video') marcarComVideo(id, false); };
+        track.onunmute = () => { if (track.kind === 'video') marcarComVideo(id, true); };
+        video.play().catch(() => {});
       };
 
       pc.onnegotiationneeded = async () => {
@@ -369,6 +432,7 @@
 
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'failed') pc.restartIce();
+        atualizarStatus();
       };
 
       return peer;
@@ -400,8 +464,14 @@
       }
     }
 
-    socket.on('existing-users', (users) => users.forEach((u) => createPC(u.id, u.name)));
-    socket.on('user-joined', ({ id, name }) => createPC(id, name));
+    socket.on('existing-users', (users) => {
+      users.forEach((u) => createPC(u.id, u.name));
+      atualizarStatus();
+    });
+    socket.on('user-joined', ({ id, name }) => {
+      createPC(id, name);
+      atualizarStatus();
+    });
     socket.on('signal', onSignal);
 
     socket.on('user-left', (id) => {
@@ -410,6 +480,7 @@
       peer.pc.close();
       peers.delete(id);
       $('tile-' + id)?.remove();
+      atualizarStatus();
     });
 
     async function toggleShare() {
@@ -417,14 +488,11 @@
 
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            frameRate: { ideal: FPS_ALVO, max: FPS_ALVO },
-          },
+          video: restricoesVideo(),
           audio: false,
         });
 
         screenTrack = stream.getVideoTracks()[0];
-        // "motion" diz ao navegador para priorizar movimento (fluidez) em vez de nitidez parada
         screenTrack.contentHint = 'motion';
         screenTrack.onended = stopShare;
 
@@ -434,7 +502,7 @@
         focarTile($('tile-me'));
 
         peers.forEach((p) => {
-          p.videoSender.replaceTrack(screenTrack);
+          p.videoSender.replaceTrack(screenTrack).catch(() => {});
           ajustarQualidade(p.videoSender);
         });
 
@@ -445,6 +513,19 @@
       }
     }
 
+    // Troca a resolução. Se já estiver compartilhando, aplica na hora.
+    async function mudarResolucao(valor) {
+      resAtual = valor;
+      if (screenTrack) {
+        try {
+          await screenTrack.applyConstraints(restricoesVideo());
+        } catch (e) {
+          console.log('Não foi possível mudar a resolução agora:', e);
+        }
+      }
+      peers.forEach((p) => ajustarQualidade(p.videoSender));
+    }
+
     function stopShare() {
       if (!screenTrack) return;
       screenTrack.stop();
@@ -452,14 +533,14 @@
       meVideo.srcObject = null;
       marcarComVideo('me', false);
       $('tile-me').classList.remove('compartilhando');
-      peers.forEach((p) => p.videoSender.replaceTrack(null));
+      peers.forEach((p) => p.videoSender.replaceTrack(null).catch(() => {}));
 
       $('shareBtn').textContent = '🖥️ Compartilhar tela';
       $('shareBtn').classList.remove('ativo');
     }
 
     function toggleMic(btn) {
-      if (!micTrack) return;
+      if (!micTrack) return alert('Seu microfone não foi liberado. Ajuste a permissão no navegador e entre na sala de novo.');
       micTrack.enabled = !micTrack.enabled;
       btn.textContent = micTrack.enabled ? '🎤 Desligar microfone' : '🔇 Ligar microfone';
       btn.classList.toggle('ativo', !micTrack.enabled);
