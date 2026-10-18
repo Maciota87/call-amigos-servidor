@@ -5,36 +5,213 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Morro do Bingão</title>
   <style>
+    :root {
+      --verde: #1b7f3b;
+      --verde-escuro: #0d3b1e;
+      --amarelo: #ffc629;
+      --vermelho: #e0313b;
+      --branco: #fffdf5;
+      --cinza: #2a3b30;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: system-ui, sans-serif; background: #1e1f22; color: #eee; min-height: 100vh; }
-    header { padding: 12px 16px; background: #2b2d31; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    input { padding: 8px 10px; border-radius: 6px; border: none; background: #1e1f22; color: #eee; font-size: 14px; }
-    button { padding: 8px 14px; border: none; border-radius: 6px; background: #5865f2; color: #fff; cursor: pointer; font-size: 14px; }
-    button:hover { filter: brightness(1.1); }
-    button.red { background: #da373c; }
-    button.gray { background: #4e5058; }
-    #grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px; padding: 10px; }
-    .tile { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; }
-    .tile video { width: 100%; height: 100%; object-fit: contain; }
-    .tile span { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.6); padding: 3px 8px; border-radius: 4px; font-size: 14px; }
-    #controls { display: none; gap: 8px; }
+    [hidden] { display: none !important; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--branco);
+      background: radial-gradient(circle at top, #1f5e35 0%, var(--verde-escuro) 60%, #082414 100%);
+      background-attachment: fixed;
+    }
+
+    header {
+      text-align: center;
+      padding: 28px 16px 10px;
+      animation: descer .6s ease;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 6vw, 3.2rem);
+      letter-spacing: 1px;
+      text-shadow: 0 4px 0 rgba(0,0,0,.35);
+    }
+    h1 .bola {
+      display: inline-block;
+      animation: balancar 2.4s ease-in-out infinite;
+    }
+    .sub { margin: 6px 0 0; opacity: .8; font-size: 1rem; }
+
+    /* Cartão de entrada */
+    .card {
+      max-width: 420px;
+      margin: 28px auto;
+      padding: 28px;
+      background: var(--cinza);
+      border-radius: 20px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.35);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      animation: subir .5s ease;
+    }
+    .card label { font-size: .9rem; opacity: .85; }
+
+    input {
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 2px solid transparent;
+      background: #132218;
+      color: var(--branco);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    input:focus { border-color: var(--amarelo); }
+
+    .btn {
+      padding: 12px 18px;
+      border: none;
+      border-radius: 12px;
+      background: #3d5a48;
+      color: var(--branco);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .15s, filter .2s, background .2s;
+    }
+    .btn:hover { filter: brightness(1.12); transform: translateY(-2px); }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: var(--verde); }
+    .btn.destaque { background: var(--amarelo); color: #1a1a1a; }
+    .btn.danger { background: var(--vermelho); }
+    .btn.big { padding: 15px; font-size: 1.1rem; }
+    .btn.ativo { background: var(--amarelo); color: #1a1a1a; }
+
+    /* Tela de chamada */
+    #call {
+      padding: 0 14px 20px;
+      animation: subir .4s ease;
+    }
+    #grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      align-items: center;
+      min-height: 60vh;
+    }
+    .tile {
+      position: relative;
+      flex: 0 0 230px;
+      aspect-ratio: 16 / 9;
+      background: #050d08;
+      border-radius: 16px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 3px solid transparent;
+      box-shadow: 0 6px 18px rgba(0,0,0,.4);
+      transition: flex .35s ease, height .35s ease, border-color .25s;
+      animation: entrar .4s ease;
+    }
+    .tile:hover { border-color: rgba(255,198,41,.5); }
+    .tile.focus {
+      flex: 1 1 100%;
+      aspect-ratio: auto;
+      height: 62vh;
+      border-color: var(--amarelo);
+    }
+    .tile video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #050d08;
+    }
+    .tile .avatar {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      font-weight: 800;
+      color: var(--amarelo);
+      background: linear-gradient(135deg, #1b7f3b, #0d3b1e);
+    }
+    .tile.sem-video .avatar { display: flex; }
+    .tile.sem-video video { visibility: hidden; }
+    .tile .nome {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      background: rgba(0,0,0,.65);
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: .9rem;
+    }
+    .tile .tag-tela {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: var(--vermelho);
+      padding: 3px 9px;
+      border-radius: 8px;
+      font-size: .75rem;
+      font-weight: 700;
+      display: none;
+    }
+    .tile.compartilhando .tag-tela { display: block; }
+
+    #controls {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+      padding: 14px;
+      background: rgba(0,0,0,.35);
+      border-radius: 18px;
+      position: sticky;
+      bottom: 12px;
+    }
+    .dica { text-align: center; opacity: .6; font-size: .9rem; margin: 14px 0 0; }
+
+    @keyframes descer { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+    @keyframes subir { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    @keyframes entrar { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
+    @keyframes balancar { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
+
+    @media (max-width: 600px) {
+      .tile { flex: 0 0 150px; }
+      .tile.focus { height: 45vh; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <div id="setup" style="display:flex;gap:8px;flex-wrap:wrap;">
-      <input id="room" placeholder="Nome da sala (ex: amigos123)">
-      <input id="name" placeholder="Seu nome">
-      <button onclick="join()">Entrar</button>
-    </div>
-    <div id="controls">
-      <button id="shareBtn" onclick="toggleShare()">Compartilhar tela</button>
-      <button id="micBtn" class="gray" onclick="toggleMic(this)">Mutar</button>
-      <button class="red" onclick="location.reload()">Sair</button>
-    </div>
+    <h1><span class="bola">🎱</span> Morro do Bingão</h1>
+    <p class="sub">Chamada com amigos e compartilhamento de tela</p>
   </header>
 
-  <div id="grid"></div>
+  <section id="setup" class="card">
+    <label for="room">Nome da sala</label>
+    <input id="room" placeholder="ex: bingo-da-galera">
+    <label for="name">Seu nome</label>
+    <input id="name" placeholder="ex: Maria">
+    <button class="btn primary big" onclick="join()">Entrar na sala</button>
+  </section>
+
+  <section id="call" hidden>
+    <div id="grid"></div>
+
+    <nav id="controls">
+      <button id="micBtn" class="btn" onclick="toggleMic(this)">🎤 Desligar microfone</button>
+      <button id="shareBtn" class="btn destaque" onclick="toggleShare()">🖥️ Compartilhar tela</button>
+      <button class="btn danger" onclick="location.reload()">📞 Sair da chamada</button>
+    </nav>
+
+    <p class="dica">Clique em um vídeo para colocá-lo em destaque.</p>
+  </section>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -49,28 +226,47 @@
 
     function addTile(id, name, muted = false) {
       const div = document.createElement('div');
-      div.className = 'tile';
+      div.className = 'tile sem-video';
       div.id = 'tile-' + id;
-      div.innerHTML = `<video autoplay playsinline ${muted ? 'muted' : ''}></video><span></span>`;
-      div.querySelector('span').textContent = name;
+      div.innerHTML = `
+        <video autoplay playsinline ${muted ? 'muted' : ''}></video>
+        <div class="avatar">${name.trim().charAt(0).toUpperCase()}</div>
+        <span class="tag-tela">AO VIVO</span>
+        <span class="nome"></span>`;
+      div.querySelector('.nome').textContent = name;
+      div.onclick = () => focarTile(div);
       $('grid').appendChild(div);
+
+      // Se ainda não há ninguém em destaque, coloca este vídeo em destaque
+      if (!document.querySelector('.tile.focus')) focarTile(div);
+
       return div.querySelector('video');
+    }
+
+    function focarTile(div) {
+      document.querySelectorAll('.tile.focus').forEach((t) => t.classList.remove('focus'));
+      div.classList.add('focus');
+    }
+
+    function marcarComVideo(id, temVideo) {
+      const div = $('tile-' + id);
+      if (div) div.classList.toggle('sem-video', !temVideo);
     }
 
     async function join() {
       const room = $('room').value.trim();
       const name = $('name').value.trim();
-      if (!room || !name) return alert('Preencha a sala e seu nome.');
+      if (!room || !name) return alert('Preencha o nome da sala e o seu nome.');
 
       try {
         const mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         micTrack = mic.getAudioTracks()[0];
       } catch {
-        alert('Não consegui acessar o microfone. Você poderá assistir, mas não falar.');
+        alert('Não consegui acessar o microfone. Você vai ouvir, mas não vai conseguir falar.');
       }
 
-      $('setup').style.display = 'none';
-      $('controls').style.display = 'flex';
+      $('setup').hidden = true;
+      $('call').hidden = false;
       meVideo = addTile('me', name + ' (você)', true);
 
       socket.emit('join-room', room, name);
@@ -99,7 +295,12 @@
       const video = addTile(id, name);
       video.srcObject = remote;
 
-      pc.ontrack = ({ track }) => remote.addTrack(track);
+      pc.ontrack = ({ track }) => {
+        remote.addTrack(track);
+        if (track.kind === 'video') marcarComVideo(id, true);
+        track.onmute = () => marcarComVideo(id, false);
+        track.onunmute = () => marcarComVideo(id, true);
+      };
 
       pc.onnegotiationneeded = async () => {
         try {
@@ -170,10 +371,13 @@
         screenTrack.onended = stopShare;
 
         meVideo.srcObject = new MediaStream([screenTrack]);
+        marcarComVideo('me', true);
+        $('tile-me').classList.add('compartilhando');
+        focarTile($('tile-me'));
         peers.forEach((p) => p.videoSender.replaceTrack(screenTrack));
 
-        $('shareBtn').textContent = 'Parar de compartilhar';
-        $('shareBtn').classList.add('red');
+        $('shareBtn').textContent = '⏹️ Parar de compartilhar';
+        $('shareBtn').classList.add('ativo');
       } catch (e) {
         console.log('Compartilhamento cancelado:', e);
       }
@@ -184,16 +388,19 @@
       screenTrack.stop();
       screenTrack = null;
       meVideo.srcObject = null;
+      marcarComVideo('me', false);
+      $('tile-me').classList.remove('compartilhando');
       peers.forEach((p) => p.videoSender.replaceTrack(null));
 
-      $('shareBtn').textContent = 'Compartilhar tela';
-      $('shareBtn').classList.remove('red');
+      $('shareBtn').textContent = '🖥️ Compartilhar tela';
+      $('shareBtn').classList.remove('ativo');
     }
 
     function toggleMic(btn) {
       if (!micTrack) return;
       micTrack.enabled = !micTrack.enabled;
-      btn.textContent = micTrack.enabled ? 'Mutar' : 'Desmutar';
+      btn.textContent = micTrack.enabled ? '🎤 Desligar microfone' : '🔇 Ligar microfone';
+      btn.classList.toggle('ativo', !micTrack.enabled);
     }
   </script>
 </body>
