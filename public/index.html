@@ -37,9 +37,10 @@
       justify-content: center;
       gap: 14px;
     }
-    .logo svg {
-      width: 86px;
+    .logo-img {
+      width: 110px;
       height: auto;
+      border-radius: 16px;
       filter: drop-shadow(0 6px 12px rgba(0,0,0,.4));
     }
     h1 {
@@ -189,13 +190,16 @@
     @media (max-width: 600px) {
       .tile { flex: 0 0 150px; }
       .tile.focus { height: 45vh; }
-      .logo svg { width: 64px; }
+      .logo-img { width: 70px; }
     }
   </style>
 </head>
 <body>
   <header>
     <div class="logo">
+      <img src="mdb.png" alt="Logo MDB" class="logo-img">
+      <h1>Morro do Bingão</h1>
+    </div>
       <svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" aria-label="Logo MDB">
         <defs>
           <linearGradient id="morro" x1="0" y1="0" x2="0" y2="1">
