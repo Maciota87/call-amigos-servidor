@@ -22,8 +22,8 @@
       min-height: 100vh;
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       color: var(--branco);
-      background: radial-gradient(circle at top, #4c1d95 0%, var(--roxo-escuro) 60%, #0a0414 100%);
-      background-attachment: fixed;
+      background: linear-gradient(rgba(10,4,20,.7), rgba(10,4,20,.85)),
+                  url('mdb.png') center / cover no-repeat fixed;
     }
 
     header {
@@ -106,7 +106,52 @@
       font-size: 1rem;
       cursor: pointer;
       border: none;
+      max-width: 100%;
     }
+
+    /* Botão dividido: ação principal + seta para escolher dispositivo */
+    .split {
+      position: relative;
+      display: inline-flex;
+      gap: 4px;
+    }
+    .split .btn.principal { border-radius: 12px 0 0 12px; }
+    .split .btn.caret {
+      border-radius: 0 12px 12px 0;
+      padding: 12px 12px;
+      font-size: .85rem;
+    }
+    .menu {
+      position: absolute;
+      bottom: calc(100% + 12px);
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 260px;
+      max-width: 90vw;
+      max-height: 320px;
+      overflow-y: auto;
+      background: var(--cinza);
+      border-radius: 14px;
+      padding: 8px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.5);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 50;
+    }
+    .menu-titulo { font-size: .8rem; opacity: .7; padding: 4px 12px; }
+    .menu-item {
+      background: none;
+      border: none;
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: var(--branco);
+      font-size: .9rem;
+      cursor: pointer;
+    }
+    .menu-item:hover { background: #4a3a63; }
+    .menu-item.sel { background: var(--lilas); color: #1a0b2e; }
 
     #call {
       padding: 0 14px 20px;
@@ -200,6 +245,42 @@
       position: sticky;
       bottom: 12px;
     }
+
+    #musicPanel, #ytPanel {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin: 12px auto 0;
+      padding: 14px;
+      max-width: 720px;
+      background: rgba(46,31,74,.85);
+      border-radius: 18px;
+    }
+    #musicPanel label { font-size: .9rem; opacity: .85; }
+    #musicNome {
+      flex-basis: 100%;
+      text-align: center;
+      font-size: .95rem;
+      opacity: .9;
+      word-break: break-all;
+    }
+    #musicPanel input[type="range"] { padding: 0; accent-color: var(--lilas-claro); width: 140px; }
+    #ytLink { flex: 1 1 320px; }
+    #ytArea {
+      width: 100%;
+      max-width: 960px;
+      margin: 14px auto 0;
+      aspect-ratio: 16 / 9;
+    }
+    #ytArea iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      border-radius: 16px;
+    }
+
     .dica { text-align: center; opacity: .6; font-size: .9rem; margin: 14px 0 0; }
 
     @keyframes descer { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
@@ -235,7 +316,18 @@
     <div id="grid"></div>
 
     <nav id="controls">
-      <button id="micBtn" class="btn" onclick="toggleMic(this)">🎤 Desligar microfone</button>
+      <div class="split">
+        <button id="micBtn" class="btn principal" onclick="toggleMic()">🎤 Microfone</button>
+        <button class="btn caret" onclick="toggleMenu('mic')" title="Escolher microfone">▲</button>
+        <div id="menu-mic" class="menu" hidden></div>
+      </div>
+
+      <div class="split">
+        <button id="foneBtn" class="btn principal" onclick="toggleFone()">🎧 Fone</button>
+        <button class="btn caret" onclick="toggleMenu('spk')" title="Escolher fone ou saída de áudio">▲</button>
+        <div id="menu-spk" class="menu" hidden></div>
+      </div>
+
       <button id="shareBtn" class="btn destaque" onclick="toggleShare()">🖥️ Compartilhar tela</button>
       <select id="resolucao" class="btn-select" onchange="mudarResolucao(this.value)" title="Resolução da tela compartilhada">
         <option value="720">720p · 60 fps</option>
@@ -244,12 +336,35 @@
         <option value="2160">4K · 60 fps</option>
         <option value="original">Original · 60 fps</option>
       </select>
+      <button id="musicToggleBtn" class="btn" onclick="togglePainelMusica()">🎵 Música</button>
+      <button id="ytToggleBtn" class="btn" onclick="togglePainelYoutube()">📺 YouTube</button>
       <button id="fullBtn" class="btn" onclick="toggleFull()">⛶ Tela cheia</button>
       <button class="btn" onclick="ativarSom()">🔊 Ativar som</button>
       <button class="btn danger" onclick="location.reload()">📞 Sair da chamada</button>
     </nav>
 
-    <p class="dica">Clique em um vídeo para colocá-lo em destaque. Se não ouvir ninguém, clique em "Ativar som".</p>
+    <div id="musicPanel" hidden>
+      <span id="musicNome">Nenhuma música escolhida</span>
+      <input type="file" id="musicFile" accept="audio/*" hidden>
+      <button class="btn" onclick="$('musicFile').click()">📂 Escolher música</button>
+      <button id="musicPlayBtn" class="btn primary" onclick="togglePlayMusica()">▶️ Tocar</button>
+      <button class="btn danger" onclick="pararMusica()">⏹️ Parar</button>
+      <label for="musicVolume">Volume da música</label>
+      <input type="range" id="musicVolume" min="0" max="100" value="60" oninput="ajustarVolumeMusica(this.value)">
+    </div>
+
+    <div id="ytPanel" hidden>
+      <input id="ytLink" placeholder="Cole o link do YouTube aqui">
+      <button class="btn primary" onclick="carregarYoutube()">▶️ Abrir vídeo</button>
+      <button class="btn danger" onclick="fecharYoutube()">✖ Fechar</button>
+      <p class="dica" style="flex-basis:100%;margin:0;">Para os amigos ouvirem: clique em <b>Compartilhar tela</b>, escolha esta aba e marque <b>"Compartilhar áudio da aba"</b>.</p>
+    </div>
+
+    <div id="ytArea" hidden>
+      <iframe id="ytFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+    </div>
+
+    <p class="dica">Clique em um vídeo para colocá-lo em destaque. Use ▲ ao lado de Microfone para escolher o microfone, e ▲ ao lado de Fone para escolher fones ou caixas de som. Use fone de ouvido para evitar eco.</p>
   </section>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -258,9 +373,23 @@
     const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
     const peers = new Map();
     let micTrack = null;
+    let micSrcNode = null;
+    let micId = '';
     let screenTrack = null;
+    let screenAudioTrack = null;
     let meVideo = null;
     let resAtual = '1080';
+    let speakerId = '';
+    let deafened = false;
+
+    // Áudio: o microfone e a música são misturados num único canal enviado aos amigos
+    let audioCtx = null;
+    let mixDest = null;
+    let sendAudioTrack = null;
+    let musicGain = null;
+    let ouvirGain = null;
+    let musicEl = null;
+    let musicSrc = null;
 
     const FPS_ALVO = 60;
 
@@ -308,6 +437,7 @@
       if (!document.querySelector('.tile.focus')) focarTile(div);
 
       const video = div.querySelector('video');
+      aplicarSaidaEm(video);
       video.play().catch(() => {});
       return video;
     }
@@ -336,12 +466,203 @@
       }
     }
 
+    // ===== Microfone e fone =====
+
+    function toggleMic() {
+      if (!micTrack) return alert('Seu microfone não foi liberado. Ajuste a permissão no navegador e entre na sala de novo.');
+      micTrack.enabled = !micTrack.enabled;
+      atualizarBotoesAudio();
+    }
+
+    // Para de ouvir os amigos (sua voz continua sendo enviada)
+    function toggleFone() {
+      deafened = !deafened;
+      if (ouvirGain) ouvirGain.gain.value = deafened ? 0 : 1;
+      document.querySelectorAll('#grid video').forEach((el) => {
+        if (el.closest('#tile-me')) return;
+        el.muted = deafened;
+      });
+      atualizarBotoesAudio();
+    }
+
+    function atualizarBotoesAudio() {
+      const m = $('micBtn');
+      const mutado = !!micTrack && !micTrack.enabled;
+      m.textContent = mutado ? '🔇 Microfone mutado' : '🎤 Microfone';
+      m.classList.toggle('ativo', mutado);
+
+      const f = $('foneBtn');
+      f.textContent = deafened ? '🔕 Fone mutado' : '🎧 Fone';
+      f.classList.toggle('ativo', deafened);
+    }
+
+    // ===== Menus de dispositivos =====
+
+    function toggleMenu(tipo) {
+      const menu = $('menu-' + tipo);
+      const abrir = menu.hidden;
+      fecharMenus();
+      if (abrir) {
+        menu.hidden = false;
+        listarDispositivos();
+      }
+    }
+
+    function fecharMenus() {
+      document.querySelectorAll('.menu').forEach((m) => { m.hidden = true; });
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.split')) fecharMenus();
+    });
+
+    // Monta um menu com a lista de dispositivos do tipo certo
+    function renderMenu(tipo, lista, atual, acao, titulo, avisoVazio) {
+      const menu = $('menu-' + tipo);
+      menu.innerHTML = '';
+
+      const t = document.createElement('div');
+      t.className = 'menu-titulo';
+      t.textContent = titulo;
+      menu.appendChild(t);
+
+      if (!lista.length) {
+        const vazio = document.createElement('div');
+        vazio.className = 'menu-titulo';
+        vazio.textContent = avisoVazio;
+        menu.appendChild(vazio);
+        return;
+      }
+
+      lista.forEach((d, i) => {
+        const b = document.createElement('button');
+        const selecionado = d.deviceId === atual;
+        b.className = 'menu-item' + (selecionado ? ' sel' : '');
+        b.textContent = (selecionado ? '✔ ' : '') + limparNome(d.label) || `Dispositivo ${i + 1}`;
+        b.onclick = () => {
+          fecharMenus();
+          acao(d.deviceId);
+        };
+        menu.appendChild(b);
+      });
+    }
+
+    // Remove o prefixo "Padrão - " / "Default - " que o Chrome coloca nos nomes
+    function limparNome(nome) {
+      return (nome || '').replace(/^(Padrão|Default|Comunicação|Communications)\s*-\s*/i, '');
+    }
+
+    async function listarDispositivos() {
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+
+        // Remove as entradas genéricas "padrão" e "comunicação" para não repetir aparelhos
+        const ignorar = (d) => d.deviceId === 'default' || d.deviceId === 'communications';
+
+        // Microfones: apenas dispositivos de entrada de áudio
+        const mics = devs.filter((d) => d.kind === 'audioinput' && !ignorar(d));
+
+        // Fones e caixas de som: apenas dispositivos de saída de áudio
+        const saidas = devs.filter((d) => d.kind === 'audiooutput' && !ignorar(d));
+
+        renderMenu(
+          'mic', mics, micId, trocarMicrofone,
+          '🎤 Escolha o microfone',
+          'Nenhum microfone encontrado'
+        );
+
+        const suportaSaida = 'setSinkId' in HTMLMediaElement.prototype;
+        renderMenu(
+          'spk', saidas, speakerId, trocarSaida,
+          '🎧 Escolha o fone ou caixa de som',
+          suportaSaida ? 'Nenhuma saída de áudio encontrada' : 'Seu navegador não permite trocar a saída. Use Chrome ou Edge.'
+        );
+      } catch (e) {
+        console.log('Não foi possível listar os dispositivos:', e);
+      }
+    }
+
+    async function trocarMicrofone(deviceId) {
+      if (!audioCtx) return;
+      const estavaLigado = micTrack ? micTrack.enabled : true;
+      try {
+        const novo = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: deviceId ? { exact: deviceId } : undefined,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        });
+        const novaTrack = novo.getAudioTracks()[0];
+        novaTrack.enabled = estavaLigado;
+
+        if (micTrack) micTrack.stop();
+        if (micSrcNode) micSrcNode.disconnect();
+
+        micTrack = novaTrack;
+        micId = novaTrack.getSettings().deviceId || deviceId;
+        micSrcNode = audioCtx.createMediaStreamSource(new MediaStream([micTrack]));
+        micSrcNode.connect(mixDest);
+
+        atualizarBotoesAudio();
+        listarDispositivos();
+      } catch (e) {
+        alert('Não consegui usar esse microfone. Tente outro na lista.');
+      }
+    }
+
+    function trocarSaida(deviceId) {
+      speakerId = deviceId;
+      aplicarSaidaGeral();
+      listarDispositivos();
+    }
+
+    function aplicarSaidaEm(elemento) {
+      if (elemento && typeof elemento.setSinkId === 'function') {
+        elemento.setSinkId(speakerId).catch(() => {});
+      }
+    }
+
+    function aplicarSaidaGeral() {
+      document.querySelectorAll('video, audio').forEach(aplicarSaidaEm);
+      if (audioCtx && typeof audioCtx.setSinkId === 'function') {
+        audioCtx.setSinkId(speakerId).catch(() => {});
+      }
+    }
+
+    navigator.mediaDevices.addEventListener('devicechange', () => listarDispositivos());
+
     function ativarSom() {
       document.querySelectorAll('video').forEach((v) => {
         if (v.muted) return;
         v.play().catch(() => {});
       });
       document.querySelectorAll('audio').forEach((a) => a.play().catch(() => {}));
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function prepararAudio() {
+      audioCtx = new AudioContext();
+      mixDest = audioCtx.createMediaStreamDestination();
+
+      if (micTrack) {
+        micSrcNode = audioCtx.createMediaStreamSource(new MediaStream([micTrack]));
+        micSrcNode.connect(mixDest);
+      }
+
+      musicGain = audioCtx.createGain();
+      musicGain.gain.value = 0.6;
+      musicGain.connect(mixDest);
+
+      // Saída local da música, controlada pelo botão de fone
+      ouvirGain = audioCtx.createGain();
+      ouvirGain.gain.value = 1;
+      ouvirGain.connect(audioCtx.destination);
+      musicGain.connect(ouvirGain);
+
+      sendAudioTrack = mixDest.stream.getAudioTracks()[0];
     }
 
     async function join() {
@@ -355,14 +676,19 @@
           video: false,
         });
         micTrack = mic.getAudioTracks()[0];
+        micId = micTrack.getSettings().deviceId || '';
       } catch (e) {
         alert('Não consegui acessar o microfone. Libere a permissão do microfone no navegador e entre de novo. Por enquanto você vai ouvir, mas não vai conseguir falar.');
       }
+
+      prepararAudio();
 
       $('setup').hidden = true;
       $('call').hidden = false;
       meVideo = addTile('me', name + ' (você)', true);
       atualizarStatus();
+      atualizarBotoesAudio();
+      listarDispositivos();
 
       socket.emit('join-room', room, name);
     }
@@ -375,20 +701,22 @@
 
       const audioSender = pc.addTransceiver('audio', { direction: 'sendrecv' }).sender;
       const videoSender = pc.addTransceiver('video', { direction: 'sendrecv' }).sender;
+      const screenAudioSender = pc.addTransceiver('audio', { direction: 'sendrecv' }).sender;
 
       const peer = {
-        pc, audioSender, videoSender,
+        pc, audioSender, videoSender, screenAudioSender,
         polite: socket.id < id,
         makingOffer: false,
         ignoreOffer: false,
       };
       peers.set(id, peer);
 
-      if (micTrack) audioSender.replaceTrack(micTrack).catch(() => {});
+      if (sendAudioTrack) audioSender.replaceTrack(sendAudioTrack).catch(() => {});
       if (screenTrack) {
         videoSender.replaceTrack(screenTrack).catch(() => {});
         ajustarQualidade(videoSender);
       }
+      if (screenAudioTrack) screenAudioSender.replaceTrack(screenAudioTrack).catch(() => {});
 
       const video = addTile(id, name);
       video.srcObject = remote;
@@ -398,6 +726,8 @@
         if (track.kind === 'video') marcarComVideo(id, true);
         track.onmute = () => { if (track.kind === 'video') marcarComVideo(id, false); };
         track.onunmute = () => { if (track.kind === 'video') marcarComVideo(id, true); };
+        video.muted = deafened;
+        aplicarSaidaEm(video);
         video.play().catch(() => {});
       };
 
@@ -477,12 +807,14 @@
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({
           video: restricoesVideo(),
-          audio: false,
+          audio: true,
         });
 
         screenTrack = stream.getVideoTracks()[0];
         screenTrack.contentHint = 'motion';
         screenTrack.onended = stopShare;
+
+        screenAudioTrack = stream.getAudioTracks()[0] || null;
 
         meVideo.srcObject = new MediaStream([screenTrack]);
         marcarComVideo('me', true);
@@ -492,6 +824,7 @@
         peers.forEach((p) => {
           p.videoSender.replaceTrack(screenTrack).catch(() => {});
           ajustarQualidade(p.videoSender);
+          if (screenAudioTrack) p.screenAudioSender.replaceTrack(screenAudioTrack).catch(() => {});
         });
 
         $('shareBtn').textContent = '⏹️ Parar de compartilhar';
@@ -517,20 +850,19 @@
       if (!screenTrack) return;
       screenTrack.stop();
       screenTrack = null;
+      if (screenAudioTrack) screenAudioTrack.stop();
+      screenAudioTrack = null;
+
       meVideo.srcObject = null;
       marcarComVideo('me', false);
       $('tile-me').classList.remove('compartilhando');
-      peers.forEach((p) => p.videoSender.replaceTrack(null).catch(() => {}));
+      peers.forEach((p) => {
+        p.videoSender.replaceTrack(null).catch(() => {});
+        p.screenAudioSender.replaceTrack(null).catch(() => {});
+      });
 
       $('shareBtn').textContent = '🖥️ Compartilhar tela';
       $('shareBtn').classList.remove('ativo');
-    }
-
-    function toggleMic(btn) {
-      if (!micTrack) return alert('Seu microfone não foi liberado. Ajuste a permissão no navegador e entre na sala de novo.');
-      micTrack.enabled = !micTrack.enabled;
-      btn.textContent = micTrack.enabled ? '🎤 Desligar microfone' : '🔇 Ligar microfone';
-      btn.classList.toggle('ativo', !micTrack.enabled);
     }
 
     function toggleFull() {
@@ -549,6 +881,78 @@
       botao.textContent = cheia ? '🔲 Sair da tela cheia' : '⛶ Tela cheia';
       botao.classList.toggle('ativo', cheia);
     });
+
+    // ===== YouTube =====
+
+    function togglePainelYoutube() {
+      const painel = $('ytPanel');
+      painel.hidden = !painel.hidden;
+      $('ytToggleBtn').classList.toggle('ativo', !painel.hidden);
+    }
+
+    function extrairIdYoutube(url) {
+      const m = url.match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([A-Za-z0-9_-]{11})/);
+      return m ? m[1] : null;
+    }
+
+    function carregarYoutube() {
+      const id = extrairIdYoutube($('ytLink').value.trim());
+      if (!id) return alert('Link do YouTube inválido. Use um link como youtube.com/watch?v=... ou youtu.be/...');
+      $('ytFrame').src = `https://www.youtube.com/embed/${id}?autoplay=1`;
+      $('ytArea').hidden = false;
+    }
+
+    function fecharYoutube() {
+      $('ytFrame').src = '';
+      $('ytArea').hidden = true;
+    }
+
+    // ===== Música =====
+
+    function togglePainelMusica() {
+      const painel = $('musicPanel');
+      painel.hidden = !painel.hidden;
+      $('musicToggleBtn').classList.toggle('ativo', !painel.hidden);
+    }
+
+    $('musicFile').addEventListener('change', (e) => {
+      const arquivo = e.target.files[0];
+      if (!arquivo || !audioCtx) return;
+
+      if (musicEl) {
+        musicEl.pause();
+        URL.revokeObjectURL(musicEl.src);
+      }
+
+      musicEl = new Audio(URL.createObjectURL(arquivo));
+      musicEl.onplay = () => { $('musicPlayBtn').textContent = '⏸️ Pausar'; };
+      musicEl.onpause = () => { $('musicPlayBtn').textContent = '▶️ Tocar'; };
+      musicEl.onended = () => { $('musicPlayBtn').textContent = '▶️ Tocar'; };
+
+      musicSrc = audioCtx.createMediaElementSource(musicEl);
+      musicSrc.connect(musicGain);
+
+      $('musicNome').textContent = '🎵 ' + arquivo.name;
+      togglePlayMusica();
+      e.target.value = '';
+    });
+
+    function togglePlayMusica() {
+      if (!musicEl) return $('musicFile').click();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if (musicEl.paused) musicEl.play();
+      else musicEl.pause();
+    }
+
+    function pararMusica() {
+      if (!musicEl) return;
+      musicEl.pause();
+      musicEl.currentTime = 0;
+    }
+
+    function ajustarVolumeMusica(valor) {
+      if (musicGain) musicGain.gain.value = valor / 100;
+    }
   </script>
 </body>
 </html>
