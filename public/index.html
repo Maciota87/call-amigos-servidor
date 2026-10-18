@@ -38,9 +38,10 @@
       gap: 14px;
       flex-wrap: wrap;
     }
-    .logo svg {
-      width: 86px;
+    .logo-img {
+      width: 110px;
       height: auto;
+      border-radius: 16px;
       filter: drop-shadow(0 6px 12px rgba(0,0,0,.4));
     }
     h1 {
@@ -208,23 +209,14 @@
     @media (max-width: 600px) {
       .tile { flex: 0 0 150px; }
       .tile.focus { height: 45vh; }
-      .logo svg { width: 64px; }
+      .logo-img { width: 70px; }
     }
   </style>
 </head>
 <body>
   <header>
     <div class="logo">
-      <svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" aria-label="Logo MDB">
-        <defs>
-          <linearGradient id="morro" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#c4b5fd"/>
-            <stop offset="1" stop-color="#5b21b6"/>
-          </linearGradient>
-        </defs>
-        <path d="M0 120 Q60 20 110 40 Q160 55 200 120 Z" fill="url(#morro)"/>
-        <text x="100" y="95" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="34" font-weight="900" fill="#ffffff">MDB</text>
-      </svg>
+      <img src="mdb.png" alt="Logo MDB" class="logo-img">
       <h1>Morro do Bingão</h1>
     </div>
     <p class="sub">Chamada com amigos e compartilhamento de tela</p>
@@ -272,7 +264,6 @@
 
     const FPS_ALVO = 60;
 
-    // Resolução e bitrate máximo para cada opção
     const RESOLUCOES = {
       '720':      { w: 1280, h: 720,  bitrate: 4000000 },
       '1080':     { w: 1920, h: 1080, bitrate: 8000000 },
@@ -331,7 +322,6 @@
       if (div) div.classList.toggle('sem-video', !temVideo);
     }
 
-    // Ajusta bitrate e taxa de quadros do envio de tela
     function ajustarQualidade(sender) {
       if (!sender || !sender.track || sender.track.kind !== 'video') return;
       try {
@@ -346,7 +336,6 @@
       }
     }
 
-    // Tenta tocar todos os vídeos e áudios (libera o som no navegador)
     function ativarSom() {
       document.querySelectorAll('video').forEach((v) => {
         if (v.muted) return;
@@ -395,7 +384,6 @@
       };
       peers.set(id, peer);
 
-      // Envia o microfone para o amigo (sempre que disponível)
       if (micTrack) audioSender.replaceTrack(micTrack).catch(() => {});
       if (screenTrack) {
         videoSender.replaceTrack(screenTrack).catch(() => {});
@@ -513,7 +501,6 @@
       }
     }
 
-    // Troca a resolução. Se já estiver compartilhando, aplica na hora.
     async function mudarResolucao(valor) {
       resAtual = valor;
       if (screenTrack) {
