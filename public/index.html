@@ -112,6 +112,25 @@
       max-width: 100%;
     }
 
+    /* Controle de volume do som da tela */
+    .controle-volume {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: #4a3a63;
+      font-size: .95rem;
+      font-weight: 600;
+    }
+    .controle-volume input[type="range"] {
+      width: 110px;
+      padding: 0;
+      border: none;
+      background: transparent;
+      accent-color: var(--lilas-claro);
+    }
+
     /* Botão dividido: ação principal + seta para escolher dispositivo */
     .split {
       position: relative;
@@ -327,6 +346,7 @@
       #controls .btn { padding: 12px 14px; font-size: .95rem; }
       .split .btn.caret { padding: 12px 10px; }
       select.btn-select { padding: 12px 10px; font-size: .95rem; }
+      .controle-volume input[type="range"] { width: 80px; }
 
       /* Os menus ▲ sobem pela parte de baixo da tela, mais fáceis de tocar */
       .menu {
@@ -398,13 +418,17 @@
         <option value="2160">4K · 60 fps</option>
         <option value="original">Original · 60 fps</option>
       </select>
+      <label class="controle-volume" title="Volume do som da tela compartilhada">
+        🔈 Som da tela
+        <input type="range" id="volTela" min="0" max="100" value="100" oninput="mudarVolumeTela(this.value)">
+      </label>
       <button id="avatarBtn" class="btn" onclick="escolherAvatar()">🖼️ Meu avatar</button>
       <button id="fullBtn" class="btn" onclick="toggleFull()">⛶ Tela cheia</button>
       <button class="btn" onclick="ativarSom()">🔊 Ativar som</button>
       <button class="btn danger" onclick="location.reload()">📞 Sair da chamada</button>
     </nav>
 
-    <p class="dica" id="dicaCelular">Clique em um vídeo para colocá-lo em destaque. Use ▲ ao lado de Microfone para escolher o microfone, e ▲ ao lado de Fone para escolher fones ou caixas de som. Use fone de ouvido para evitar eco.</p>
+    <p class="dica" id="dicaCelular">Clique em um vídeo para colocá-lo em destaque. Quando alguém fala, o som da tela abaixa sozinho para a voz aparecer. Use ▲ ao lado de Microfone para escolher o microfone, e ▲ ao lado de Fone para escolher fones ou caixas de som. Use fone de ouvido para evitar eco.</p>
   </section>
 
   <input type="file" id="avatarFile" accept="image/*" hidden>
@@ -424,6 +448,9 @@
     let speakerId = '';
     let deafened = false;
 
+    // Quem está com a tela compartilhada (só esses mostram o vídeo, os outros mostram o avatar)
+    const telaAtiva = new Set();
+
     // Avatares: minha foto e as fotos recebidas dos amigos
     let meuAvatar = null;
     let ultimoArquivoAvatar = null;
@@ -433,6 +460,13 @@
     let audioCtx = null;
     let mixDest = null;
     let sendAudioTrack = null;
+
+    // Som da tela compartilhada: abaixa sozinho quando alguém fala
+    const NIVEL_ABAIXADO = 0.12; // 0.12 = 12% do volume quando alguém fala. Aumente (ex: 0.25) se ficar baixo demais.
+    let volumeTela = 1;          // controle do slider "Som da tela" (0 a 1)
+    let duckAtivo = false;       // true enquanto alguém está falando
+    let ultimoAlvo = -1;
+    const audiosTela = new Map(); // id -> { fonte, ganho, destino, el }
 
     // Detecção de quem está falando (para o brilho no avatar)
     const analisadores = new Map();
@@ -485,7 +519,8 @@
 
     function addTile(id, name, muted = false) {
       const div = document.createElement('div');
-      div.className = 'tile sem-video';
+      const ativa = telaAtiva.has(id);
+      div.className = 'tile ' + (ativa ? 'compartilhando' : 'sem-video');
       div.id = 'tile-' + id;
       div.innerHTML = `
         <video autoplay playsinline ${muted ? 'muted' : ''}></video>
@@ -511,9 +546,16 @@
       div.classList.add('focus');
     }
 
-    function marcarComVideo(id, temVideo) {
+    // Mostra o vídeo da tela (ativa = true) ou volta para o avatar (ativa = false)
+    function definirTela(id, ativa) {
+      if (ativa) telaAtiva.add(id);
+      else telaAtiva.delete(id);
+
       const div = $('tile-' + id);
-      if (div) div.classList.toggle('sem-video', !temVideo);
+      if (!div) return;
+      div.classList.toggle('sem-video', !ativa);
+      div.classList.toggle('compartilhando', ativa);
+      if (ativa) focarTile(div);
     }
 
     function ajustarQualidade(sender) {
@@ -528,6 +570,61 @@
       } catch (e) {
         // Ignora: alguns navegadores só aceitam depois da negociação
       }
+    }
+
+    // ===== Som da tela compartilhada (separado da voz e com redução automática) =====
+
+    // Recebe o áudio da tela de um amigo e toca por um caminho próprio,
+    // que pode ser abaixado sem afetar a voz
+    function ligarAudioDaTela(id, track) {
+      if (!audioCtx) return;
+      desligarAudioDaTela(id);
+
+      const fonte = audioCtx.createMediaStreamSource(new MediaStream([track]));
+      const ganho = audioCtx.createGain();
+      ganho.gain.value = alvoTela();
+      const destino = audioCtx.createMediaStreamDestination();
+      fonte.connect(ganho);
+      ganho.connect(destino);
+
+      const el = new Audio();
+      el.srcObject = destino.stream;
+      el.muted = deafened;
+      aplicarSaidaEm(el);
+      el.play().catch(() => {});
+
+      audiosTela.set(id, { fonte, ganho, destino, el });
+    }
+
+    function desligarAudioDaTela(id) {
+      const a = audiosTela.get(id);
+      if (!a) return;
+      try {
+        a.fonte.disconnect();
+        a.ganho.disconnect();
+      } catch (e) {}
+      a.el.pause();
+      a.el.srcObject = null;
+      audiosTela.delete(id);
+    }
+
+    // Volume final do som da tela: slider do usuário, reduzido quando alguém fala
+    function alvoTela() {
+      return (duckAtivo ? NIVEL_ABAIXADO : 1) * volumeTela;
+    }
+
+    function atualizarVolumeTela(forcar = false) {
+      if (!audioCtx) return;
+      const alvo = alvoTela();
+      if (!forcar && alvo === ultimoAlvo) return;
+      const tau = alvo < ultimoAlvo ? 0.05 : 0.35; // abaixa rápido e volta devagar
+      ultimoAlvo = alvo;
+      audiosTela.forEach((a) => a.ganho.gain.setTargetAtTime(alvo, audioCtx.currentTime, tau));
+    }
+
+    function mudarVolumeTela(valor) {
+      volumeTela = valor / 100;
+      atualizarVolumeTela(true);
     }
 
     // ===== Sons de entrada e saída (gerados pelo app, sem arquivos) =====
@@ -601,6 +698,8 @@
 
       const ciclo = () => {
         const agora = performance.now();
+        let alguemRemotoFala = false;
+
         analisadores.forEach((a, id) => {
           a.analyser.getByteTimeDomainData(a.dados);
           let soma = 0;
@@ -613,10 +712,16 @@
 
           let falando = (falandoAte.get(id) || 0) > agora;
           if (id === 'me' && micTrack && !micTrack.enabled) falando = false;
+          if (id !== 'me' && falando) alguemRemotoFala = true;
 
           const div = $('tile-' + id);
           if (div) div.classList.toggle('falando', falando);
         });
+
+        // Abaixa o som da tela enquanto alguém fala, para a voz aparecer
+        duckAtivo = alguemRemotoFala;
+        atualizarVolumeTela();
+
         requestAnimationFrame(ciclo);
       };
       requestAnimationFrame(ciclo);
@@ -736,6 +841,7 @@
         if (el.closest('#tile-me')) return;
         el.muted = deafened;
       });
+      audiosTela.forEach((a) => { a.el.muted = deafened; });
       atualizarBotoesAudio();
     }
 
@@ -881,6 +987,7 @@
 
     function aplicarSaidaGeral() {
       document.querySelectorAll('video, audio').forEach(aplicarSaidaEm);
+      audiosTela.forEach((a) => aplicarSaidaEm(a.el));
     }
 
     navigator.mediaDevices.addEventListener('devicechange', () => listarDispositivos());
@@ -890,7 +997,7 @@
         if (v.muted) return;
         v.play().catch(() => {});
       });
-      document.querySelectorAll('audio').forEach((a) => a.play().catch(() => {}));
+      audiosTela.forEach((a) => a.el.play().catch(() => {}));
       if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     }
 
@@ -942,16 +1049,16 @@
       const pc = new RTCPeerConnection(ICE);
       const remote = new MediaStream();
 
-      const micTr = pc.addTransceiver('audio', { direction: 'sendrecv' });
-      const audioSender = micTr.sender;
+      const audioSender = pc.addTransceiver('audio', { direction: 'sendrecv' }).sender;
       const videoSender = pc.addTransceiver('video', { direction: 'sendrecv' }).sender;
       const screenAudioSender = pc.addTransceiver('audio', { direction: 'sendrecv' }).sender;
 
       const peer = {
-        pc, micTr, audioSender, videoSender, screenAudioSender,
+        pc, audioSender, videoSender, screenAudioSender,
         polite: socket.id < id,
         makingOffer: false,
         ignoreOffer: false,
+        vozRecebida: false,
       };
       peers.set(id, peer);
 
@@ -959,6 +1066,7 @@
       if (screenTrack) {
         videoSender.replaceTrack(screenTrack).catch(() => {});
         ajustarQualidade(videoSender);
+        socket.emit('signal', { to: id, data: { tela: true } });
       }
       if (screenAudioTrack) screenAudioSender.replaceTrack(screenAudioTrack).catch(() => {});
 
@@ -968,15 +1076,24 @@
       const video = addTile(id, name);
       video.srcObject = remote;
 
-      pc.ontrack = (ev) => {
-        const { track, transceiver } = ev;
-        remote.addTrack(track);
-        if (track.kind === 'video') marcarComVideo(id, true);
-        track.onmute = () => { if (track.kind === 'video') marcarComVideo(id, false); };
-        track.onunmute = () => { if (track.kind === 'video') marcarComVideo(id, true); };
+      pc.ontrack = ({ track }) => {
+        // 1ª faixa de áudio = voz. 2ª faixa de áudio = som da tela compartilhada.
+        // O som da tela vai por um caminho separado, que pode ser abaixado sem afetar a voz.
+        if (track.kind === 'audio' && peer.vozRecebida) {
+          ligarAudioDaTela(id, track);
+          return;
+        }
 
-        // Só o canal da voz é analisado para o brilho (não o áudio da tela)
-        if (track.kind === 'audio' && transceiver === peer.micTr) {
+        remote.addTrack(track);
+
+        if (track.kind === 'video') {
+          marcarComVideo(id, true);
+          track.onmute = () => marcarComVideo(id, false);
+          track.onunmute = () => marcarComVideo(id, true);
+        }
+
+        if (track.kind === 'audio') {
+          peer.vozRecebida = true;
           criarAnalisador(id, track);
         }
 
@@ -1011,9 +1128,15 @@
     }
 
     async function onSignal({ from, data }) {
-      // Mensagem com a foto de perfil de um amigo
+      // Foto de perfil de um amigo
       if (data.avatar) {
         salvarAvatarRemoto(from, data.avatar);
+        return;
+      }
+
+      // Aviso de que o amigo começou ou parou de compartilhar a tela
+      if (data.tela !== undefined) {
+        definirTela(from, !!data.tela);
         return;
       }
 
@@ -1059,6 +1182,8 @@
       pararAnalisador(id);
       falandoAte.delete(id);
       avatarsRemotos.delete(id);
+      telaAtiva.delete(id);
+      desligarAudioDaTela(id);
 
       const peer = peers.get(id);
       if (!peer) return;
@@ -1085,14 +1210,13 @@
         screenAudioTrack = stream.getAudioTracks()[0] || null;
 
         meVideo.srcObject = new MediaStream([screenTrack]);
-        marcarComVideo('me', true);
-        $('tile-me').classList.add('compartilhando');
-        focarTile($('tile-me'));
+        definirTela('me', true);
 
-        peers.forEach((p) => {
+        peers.forEach((p, id) => {
           p.videoSender.replaceTrack(screenTrack).catch(() => {});
           ajustarQualidade(p.videoSender);
           if (screenAudioTrack) p.screenAudioSender.replaceTrack(screenAudioTrack).catch(() => {});
+          socket.emit('signal', { to: id, data: { tela: true } });
         });
 
         $('shareBtn').textContent = '⏹️ Parar de compartilhar';
@@ -1122,11 +1246,12 @@
       screenAudioTrack = null;
 
       meVideo.srcObject = null;
-      marcarComVideo('me', false);
-      $('tile-me').classList.remove('compartilhando');
-      peers.forEach((p) => {
+      definirTela('me', false);
+
+      peers.forEach((p, id) => {
         p.videoSender.replaceTrack(null).catch(() => {});
         p.screenAudioSender.replaceTrack(null).catch(() => {});
+        socket.emit('signal', { to: id, data: { tela: false } });
       });
 
       $('shareBtn').textContent = '🖥️ Compartilhar tela';
@@ -1170,7 +1295,7 @@
 
     // Texto da dica adaptado ao celular
     if (window.matchMedia('(max-width: 600px)').matches) {
-      $('dicaCelular').textContent = 'Toque em um vídeo para colocá-lo em destaque. Use fone de ouvido para evitar eco. Compartilhar tela só funciona em computadores e em alguns celulares Android.';
+      $('dicaCelular').textContent = 'Toque em um vídeo para colocá-lo em destaque. Quando alguém fala, o som da tela abaixa sozinho. Use fone de ouvido para evitar eco. Compartilhar tela só funciona em computadores e em alguns celulares Android.';
     }
   </script>
 </body>
