@@ -42,7 +42,6 @@
     }
     .sub { margin: 6px 0 0; opacity: .8; font-size: 1rem; }
 
-    /* Cartão de entrada */
     .card {
       max-width: 420px;
       margin: 28px auto;
@@ -88,7 +87,6 @@
     .btn.big { padding: 15px; font-size: 1.1rem; }
     .btn.ativo { background: var(--amarelo); color: #1a1a1a; }
 
-    /* Tela de chamada */
     #call {
       padding: 0 14px 20px;
       animation: subir .4s ease;
@@ -207,6 +205,7 @@
     <nav id="controls">
       <button id="micBtn" class="btn" onclick="toggleMic(this)">🎤 Desligar microfone</button>
       <button id="shareBtn" class="btn destaque" onclick="toggleShare()">🖥️ Compartilhar tela</button>
+      <button id="fullBtn" class="btn" onclick="toggleFull()">⛶ Tela cheia</button>
       <button class="btn danger" onclick="location.reload()">📞 Sair da chamada</button>
     </nav>
 
@@ -221,6 +220,10 @@
     let micTrack = null;
     let screenTrack = null;
     let meVideo = null;
+
+    // Qualidade alvo para a tela compartilhada: 60 fps, priorizando fluidez
+    const FPS_ALVO = 60;
+    const BITRATE_MAX = 6000000; // 6 Mbps
 
     const $ = (id) => document.getElementById(id);
 
@@ -237,7 +240,6 @@
       div.onclick = () => focarTile(div);
       $('grid').appendChild(div);
 
-      // Se ainda não há ninguém em destaque, coloca este vídeo em destaque
       if (!document.querySelector('.tile.focus')) focarTile(div);
 
       return div.querySelector('video');
@@ -251,6 +253,21 @@
     function marcarComVideo(id, temVideo) {
       const div = $('tile-' + id);
       if (div) div.classList.toggle('sem-video', !temVideo);
+    }
+
+    // Pede ao navegador para enviar a tela com a maior taxa de quadros possível
+    function ajustarQualidade(sender) {
+      if (!sender || !sender.track || sender.track.kind !== 'video') return;
+      try {
+        const params = sender.getParameters();
+        if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+        params.encodings[0].maxBitrate = BITRATE_MAX;
+        params.encodings[0].maxFramerate = FPS_ALVO;
+        params.degradationPreference = 'maintain-framerate';
+        sender.setParameters(params).catch(() => {});
+      } catch (e) {
+        // Alguns navegadores só aceitam isso depois da negociação; tudo bem ignorar
+      }
     }
 
     async function join() {
@@ -290,7 +307,10 @@
       peers.set(id, peer);
 
       if (micTrack) audioSender.replaceTrack(micTrack);
-      if (screenTrack) videoSender.replaceTrack(screenTrack);
+      if (screenTrack) {
+        videoSender.replaceTrack(screenTrack);
+        ajustarQualidade(videoSender);
+      }
 
       const video = addTile(id, name);
       video.srcObject = remote;
@@ -307,6 +327,7 @@
           peer.makingOffer = true;
           await pc.setLocalDescription();
           socket.emit('signal', { to: id, data: { description: pc.localDescription } });
+          ajustarQualidade(videoSender);
         } catch (e) {
           console.error(e);
         } finally {
@@ -340,6 +361,7 @@
         if (description.type === 'offer') {
           await pc.setLocalDescription();
           socket.emit('signal', { to: from, data: { description: pc.localDescription } });
+          ajustarQualidade(peer.videoSender);
         }
       } else if (candidate) {
         try {
@@ -366,15 +388,27 @@
       if (screenTrack) return stopShare();
 
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            frameRate: { ideal: FPS_ALVO, max: FPS_ALVO },
+          },
+          audio: false,
+        });
+
         screenTrack = stream.getVideoTracks()[0];
+        // "motion" diz ao navegador para priorizar movimento (fluidez) em vez de nitidez parada
+        screenTrack.contentHint = 'motion';
         screenTrack.onended = stopShare;
 
         meVideo.srcObject = new MediaStream([screenTrack]);
         marcarComVideo('me', true);
         $('tile-me').classList.add('compartilhando');
         focarTile($('tile-me'));
-        peers.forEach((p) => p.videoSender.replaceTrack(screenTrack));
+
+        peers.forEach((p) => {
+          p.videoSender.replaceTrack(screenTrack);
+          ajustarQualidade(p.videoSender);
+        });
 
         $('shareBtn').textContent = '⏹️ Parar de compartilhar';
         $('shareBtn').classList.add('ativo');
@@ -402,6 +436,23 @@
       btn.textContent = micTrack.enabled ? '🎤 Desligar microfone' : '🔇 Ligar microfone';
       btn.classList.toggle('ativo', !micTrack.enabled);
     }
+
+    function toggleFull() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {
+          alert('Seu navegador não permitiu a tela cheia.');
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+      const botao = $('fullBtn');
+      const cheia = !!document.fullscreenElement;
+      botao.textContent = cheia ? '🔲 Sair da tela cheia' : '⛶ Tela cheia';
+      botao.classList.toggle('ativo', cheia);
+    });
   </script>
 </body>
 </html>
