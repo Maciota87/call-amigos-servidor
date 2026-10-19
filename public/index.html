@@ -94,8 +94,13 @@
     }
     .controle-volume input[type="checkbox"] { width: 18px; height: 18px; padding: 0; border: none; accent-color: var(--lilas-claro); }
 
-    .sala-badge { width: fit-content; margin: 0 auto; padding: 8px 18px; border-radius: 999px; background: var(--cinza); box-shadow: 0 6px 16px rgba(0,0,0,.3); }
+    .sala-badge {
+      width: fit-content; max-width: 100%; margin: 0 auto; padding: 8px 18px; border-radius: 999px;
+      background: var(--cinza); box-shadow: 0 6px 16px rgba(0,0,0,.3); text-align: center;
+    }
     .sala-badge strong { color: var(--lilas); }
+    .sala-badge .sep { opacity: .5; margin: 0 6px; }
+    #timer { font-variant-numeric: tabular-nums; min-width: 4.5em; display: inline-block; }
     #status { text-align: center; margin: 14px 0 0; font-size: .95rem; opacity: .85; }
 
     /* ===== Grade de quadros ===== */
@@ -308,7 +313,7 @@
 
   <!-- Chamada -->
   <section id="call" hidden>
-    <div class="sala-badge">🏠 Sala: <strong id="salaNome"></strong></div>
+    <div class="sala-badge">🏠 Sala: <strong id="salaNome"></strong><span class="sep">·</span>⏱️ <strong id="timer" title="Tempo de chamada">00:00</strong></div>
     <p id="status">Conectando...</p>
     <div id="grid"></div>
 
@@ -439,6 +444,10 @@
     let versaoAtual = null;
     let atualizando = false;
 
+    // Cronômetro da chamada
+    let inicioCall = 0;
+    let timerIntervalo = null;
+
     const $ = (id) => document.getElementById(id);
 
     // ===== Utilidades =====
@@ -488,6 +497,32 @@
     function mostrarErro(texto) {
       $('loginErro').textContent = texto;
       $('loginErro').hidden = !texto;
+    }
+
+    // ===== Cronômetro da chamada =====
+
+    // Formata como 00:00 e, depois de 1 hora, como 1:00:00
+    function formatarTempo(ms) {
+      const total = Math.floor(ms / 1000);
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      const mm = String(m).padStart(2, '0');
+      const ss = String(s).padStart(2, '0');
+      return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+    }
+
+    function atualizarTimer() {
+      $('timer').textContent = formatarTempo(Date.now() - inicioCall);
+    }
+
+    // Usa a hora de início (e não um contador), então o tempo continua certo
+    // mesmo quando a aba fica em segundo plano e o navegador diminui a frequência
+    function iniciarTimer() {
+      if (timerIntervalo) return;
+      inicioCall = Date.now();
+      atualizarTimer();
+      timerIntervalo = setInterval(atualizarTimer, 1000);
     }
 
     // ===== Atualização automática =====
@@ -717,6 +752,7 @@
 
       $('setup').hidden = true;
       $('call').hidden = false;
+      iniciarTimer();
       meVideo = addTile('me', `${meuNome} (você)`, true);
       atualizarBotoesAudio();
       listarDispositivos();
