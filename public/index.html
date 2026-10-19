@@ -44,6 +44,8 @@
     .erro { margin: 0; color: #ff9b9b; font-size: .9rem; }
     .logado { margin: 0; text-align: center; opacity: .9; }
     .logado strong { color: var(--lilas); }
+    .check-auto { display: flex; align-items: center; gap: 8px; font-size: .95rem; cursor: pointer; }
+    .check-auto input[type="checkbox"] { width: 18px; height: 18px; padding: 0; border: none; background: transparent; accent-color: var(--lilas-claro); }
 
     input, select {
       padding: 12px 14px; border-radius: 12px; border: 2px solid transparent;
@@ -87,12 +89,6 @@
     .menu-item { background: none; border: none; text-align: left; padding: 10px 12px; border-radius: 10px; color: var(--branco); font-size: .9rem; cursor: pointer; }
     .menu-item:hover { background: #4a3a63; }
     .menu-item.sel { background: var(--lilas); color: #1a0b2e; }
-
-    .controle-volume {
-      display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px;
-      background: #4a3a63; font-size: .95rem; font-weight: 600; cursor: pointer;
-    }
-    .controle-volume input[type="checkbox"] { width: 18px; height: 18px; padding: 0; border: none; accent-color: var(--lilas-claro); }
 
     .sala-badge {
       width: fit-content; max-width: 100%; margin: 0 auto; padding: 8px 18px; border-radius: 999px;
@@ -287,6 +283,10 @@
     <input id="loginUsuario" maxlength="20" autocomplete="username" placeholder="ex: MARIA" oninput="maiusculo(this)" onkeydown="teclaLogin(event)">
     <label for="loginSenha">Senha</label>
     <input id="loginSenha" type="password" maxlength="100" autocomplete="current-password" onkeydown="teclaLogin(event)">
+    <label class="check-auto" title="Se marcado, você continua logado mesmo depois de fechar o navegador">
+      <input type="checkbox" id="autoLogin" checked onchange="salvarPreferenciaAuto(this.checked)">
+      Entrar automaticamente
+    </label>
     <p id="regras" class="dica" hidden>Usuário: de 3 a 20 letras ou números, sem espaços. Senha: no mínimo 8 caracteres, com 1 letra maiúscula e 1 número.</p>
     <p id="loginErro" class="erro" hidden></p>
     <button id="loginBtn" class="btn primary big" onclick="enviarLogin()">Entrar</button>
@@ -331,10 +331,6 @@
       </div>
 
       <button id="shareBtn" class="btn destaque" onclick="toggleShare()">🖥️ Compartilhar tela</button>
-      <label class="controle-volume" title="Quando alguém fala, o som das telas compartilhadas abaixa um pouco">
-        <input type="checkbox" id="abaixarChk" checked onchange="mudarAbaixarAoFalar(this.checked)">
-        🔉 Abaixar ao falar
-      </label>
       <button id="musicToggleBtn" class="btn" onclick="togglePainelMusica()">🎵 Música</button>
       <button id="chatBtn" class="btn" onclick="toggleChat()">💬 Chat<span id="chatBadge" class="badge" hidden>0</span></button>
       <button class="btn danger" onclick="location.reload()">📞 Sair da chamada</button>
@@ -391,8 +387,6 @@
       'original': { w: null, h: null, bitrate: 20000000 },
     };
 
-    // Som da tela: abaixa um pouco quando alguém fala (0.35 = 35% do volume)
-    const NIVEL_ABAIXADO = 0.35;
     // Volume mínimo para contar como fala. O app também aprende o ruído de fundo.
     const LIMITE_FALA = 0.02;
     const CHAVE_TOKEN = 'morro_token';
@@ -415,8 +409,6 @@
     let resAtual = '1080';
     let speakerId = '';
     let deafened = false;
-    let abaixarAoFalar = true;
-    let duckAtivo = false;
 
     let meuAvatar = null;
     let ultimoArquivoAvatar = null;
@@ -451,16 +443,6 @@
     const $ = (id) => document.getElementById(id);
 
     // ===== Utilidades =====
-
-    function lerToken() {
-      try { return localStorage.getItem(CHAVE_TOKEN); } catch (e) { return null; }
-    }
-    function salvarToken(token) {
-      try { localStorage.setItem(CHAVE_TOKEN, token); } catch (e) {}
-    }
-    function apagarToken() {
-      try { localStorage.removeItem(CHAVE_TOKEN); } catch (e) {}
-    }
 
     // Deixa o texto em maiúsculas enquanto a pessoa digita
     function maiusculo(el) {
@@ -497,6 +479,42 @@
     function mostrarErro(texto) {
       $('loginErro').textContent = texto;
       $('loginErro').hidden = !texto;
+    }
+
+    // ===== Login automático =====
+    const CHAVE_AUTO = 'morro_auto';
+
+    // Lê se a caixinha está marcada (padrão: marcada)
+    function lerPreferenciaAuto() {
+      try { return localStorage.getItem(CHAVE_AUTO) !== '0'; } catch (e) { return true; }
+    }
+
+    function salvarPreferenciaAuto(ativo) {
+      try { localStorage.setItem(CHAVE_AUTO, ativo ? '1' : '0'); } catch (e) {}
+    }
+
+    // Marcado: o login fica salvo no navegador, mesmo depois de fechar tudo.
+    // Desmarcado: o login fica só nesta aba. Atualizar a página não desloga.
+    function lerToken() {
+      try {
+        return localStorage.getItem(CHAVE_TOKEN) || sessionStorage.getItem(CHAVE_TOKEN);
+      } catch (e) { return null; }
+    }
+
+    function salvarToken(token) {
+      const lembrar = $('autoLogin').checked;
+      try {
+        localStorage.removeItem(CHAVE_TOKEN);
+        sessionStorage.removeItem(CHAVE_TOKEN);
+        (lembrar ? localStorage : sessionStorage).setItem(CHAVE_TOKEN, token);
+      } catch (e) {}
+    }
+
+    function apagarToken() {
+      try {
+        localStorage.removeItem(CHAVE_TOKEN);
+        sessionStorage.removeItem(CHAVE_TOKEN);
+      } catch (e) {}
     }
 
     // ===== Cronômetro da chamada =====
@@ -834,16 +852,21 @@
       div.classList.add('focus');
     }
 
-    // Mostra o vídeo da tela (ativa = true) ou o avatar (ativa = false)
+    // Mostra o vídeo da tela (ativa = true) ou o avatar (ativa = false).
+    // Toca um som quando alguém começa a compartilhar.
     function definirTela(id, ativa) {
+      const jaEstava = telaAtiva.has(id);
       if (ativa) telaAtiva.add(id);
       else telaAtiva.delete(id);
 
       const div = $('tile-' + id);
-      if (!div) return;
-      div.classList.toggle('sem-video', !ativa);
-      div.classList.toggle('compartilhando', ativa);
-      if (ativa) focarTile(div);
+      if (div) {
+        div.classList.toggle('sem-video', !ativa);
+        div.classList.toggle('compartilhando', ativa);
+        if (ativa) focarTile(div);
+      }
+
+      if (ativa && !jaEstava) somCompartilhar();
     }
 
     // Botões em cima do vídeo da transmissão: resolução (quem compartilha), volume e tela cheia
@@ -998,9 +1021,10 @@
       audiosTela.delete(id);
     }
 
+    // Volume do som da tela: só o controle de cada pessoa e o botão de fone (mudo)
     function alvoTela(id) {
       const vol = volTelaPorId.has(id) ? volTelaPorId.get(id) : 1;
-      return (deafened ? 0 : (duckAtivo ? NIVEL_ABAIXADO : 1)) * vol;
+      return (deafened ? 0 : 1) * vol;
     }
 
     function atualizarVolumeTela(forcar = false) {
@@ -1018,13 +1042,7 @@
       atualizarVolumeTela(true);
     }
 
-    function mudarAbaixarAoFalar(ativo) {
-      abaixarAoFalar = ativo;
-      if (!ativo) duckAtivo = false;
-      atualizarVolumeTela(true);
-    }
-
-    // ===== Sons de entrada e saída (gerados pelo app, sem arquivos) =====
+    // ===== Sons de entrada, saída e compartilhamento (gerados pelo app, sem arquivos) =====
 
     function tocarNotas(notas) {
       if (!audioCtx || deafened) return;
@@ -1046,6 +1064,7 @@
       });
     }
 
+    // Entrou: dois tons subindo
     function somEntrar() {
       tocarNotas([
         { freq: 660, inicio: 0, duracao: 0.15 },
@@ -1053,6 +1072,7 @@
       ]);
     }
 
+    // Saiu: dois tons descendo
     function somSair() {
       tocarNotas([
         { freq: 880, inicio: 0, duracao: 0.15 },
@@ -1060,7 +1080,27 @@
       ]);
     }
 
-    // ===== Brilho de quem está falando e ducking =====
+    // Começou a compartilhar: um som curto que sobe de forma rápida e contínua,
+    // com timbre diferente (triângulo) dos sons de entrar e sair
+    function somCompartilhar() {
+      if (!audioCtx || deafened) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const agora = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const ganho = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, agora);
+      osc.frequency.exponentialRampToValueAtTime(1320, agora + 0.25);
+      ganho.gain.setValueAtTime(0.0001, agora);
+      ganho.gain.exponentialRampToValueAtTime(0.22, agora + 0.03);
+      ganho.gain.exponentialRampToValueAtTime(0.0001, agora + 0.35);
+      osc.connect(ganho);
+      ganho.connect(audioCtx.destination); // só você ouve
+      osc.start(agora);
+      osc.stop(agora + 0.4);
+    }
+
+    // ===== Brilho de quem está falando =====
 
     function criarAnalisador(id, track) {
       if (!audioCtx || !track) return;
@@ -1101,7 +1141,6 @@
       // setInterval continua funcionando com a aba em segundo plano
       setInterval(() => {
         const agora = Date.now();
-        let alguemRemotoFala = false;
 
         analisadores.forEach((a, id) => {
           a.analyser.getByteTimeDomainData(a.dados);
@@ -1128,14 +1167,10 @@
 
           let falando = (falandoAte.get(id) || 0) > agora;
           if (id === 'me' && micTrack && !micTrack.enabled) falando = false;
-          if (id !== 'me' && falando) alguemRemotoFala = true;
 
           const div = $('tile-' + id);
           if (div) div.classList.toggle('falando', falando);
         });
-
-        duckAtivo = abaixarAoFalar && alguemRemotoFala;
-        atualizarVolumeTela();
       }, 80);
     }
 
@@ -1850,6 +1885,7 @@
 
     // ===== Inicialização e adaptação para celular =====
 
+    $('autoLogin').checked = lerPreferenciaAuto();
     mudarAba('entrar');
 
     if (!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)) {
