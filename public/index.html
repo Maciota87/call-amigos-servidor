@@ -205,6 +205,23 @@
 
     .dica { text-align: center; opacity: .6; font-size: .9rem; margin: 14px 0 0; }
 
+    /* ===== Tela de atualização ===== */
+    #atualizacao {
+      position: fixed; inset: 0; z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; background: rgba(10,4,20,.92); animation: entrar .3s ease;
+    }
+    .caixa-atualizacao { text-align: center; max-width: 420px; }
+    .logo-atualizacao { width: 90px; border-radius: 16px; margin-bottom: 18px; }
+    .caixa-atualizacao h2 { margin: 0 0 8px; font-size: 1.5rem; color: var(--lilas); }
+    .caixa-atualizacao p { margin: 0; opacity: .85; }
+    .giro {
+      width: 48px; height: 48px; margin: 0 auto 18px;
+      border: 5px solid rgba(196,181,253,.25); border-top-color: var(--lilas-claro);
+      border-radius: 50%; animation: girar .9s linear infinite;
+    }
+    @keyframes girar { to { transform: rotate(360deg); } }
+
     /* ===== Tela cheia: a chamada ocupa o monitor inteiro ===== */
     body.tela-cheia { overflow: hidden; }
     body.tela-cheia header,
@@ -345,6 +362,16 @@
 
   <input type="file" id="avatarFile" accept="image/*" hidden>
 
+  <!-- Tela exibida quando há uma nova versão do app -->
+  <div id="atualizacao" hidden>
+    <div class="caixa-atualizacao">
+      <img src="mdb.png" alt="" class="logo-atualizacao">
+      <div class="giro"></div>
+      <h2>Nova versão disponível</h2>
+      <p id="atualizacaoTexto">Atualizando o Morro do Bingão...</p>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
@@ -409,6 +436,9 @@
     let chatAberto = false;
     let naoLidas = 0;
 
+    let versaoAtual = null;
+    let atualizando = false;
+
     const $ = (id) => document.getElementById(id);
 
     // ===== Utilidades =====
@@ -458,6 +488,49 @@
     function mostrarErro(texto) {
       $('loginErro').textContent = texto;
       $('loginErro').hidden = !texto;
+    }
+
+    // ===== Atualização automática =====
+    // O servidor envia a versão do código. Quando ela muda (depois de uma atualização no GitHub),
+    // a página mostra a tela de atualização e recarrega sozinha.
+
+    socket.on('versao', (v) => {
+      if (versaoAtual === null) {
+        versaoAtual = v;
+        return;
+      }
+      if (v !== versaoAtual) iniciarAtualizacao();
+    });
+
+    function iniciarAtualizacao() {
+      if (atualizando) return;
+      atualizando = true;
+
+      if (estouNaCall && minhaSala) {
+        // Guarda a sala para voltar para ela depois que a página recarregar
+        try {
+          sessionStorage.setItem('morro_retomar', JSON.stringify({ sala: minhaSala }));
+        } catch (e) {}
+        $('atualizacaoTexto').textContent = `Nova versão do app. Atualizando e voltando para a sala ${minhaSala} em alguns segundos...`;
+      } else {
+        $('atualizacaoTexto').textContent = 'Nova versão do app. Atualizando em alguns segundos...';
+      }
+
+      $('atualizacao').hidden = false;
+      setTimeout(() => location.reload(), 3000);
+    }
+
+    // Depois de uma atualização, volta para a sala em que a pessoa estava
+    function retomarAposAtualizacao() {
+      let dados = null;
+      try {
+        dados = JSON.parse(sessionStorage.getItem('morro_retomar') || 'null');
+        sessionStorage.removeItem('morro_retomar');
+      } catch (e) {}
+      if (!dados || !dados.sala) return;
+
+      $('room').value = dados.sala;
+      setTimeout(() => join(), 500);
     }
 
     // ===== Login e conta =====
@@ -511,6 +584,7 @@
       $('previewInicial').textContent = nome.charAt(0);
       $('login').hidden = true;
       $('setup').hidden = false;
+      retomarAposAtualizacao();
     }
 
     function mostrarTelaLogin() {
@@ -536,6 +610,8 @@
       if (!token) return;
 
       socket.emit('retomar', token, (res) => {
+        if (atualizando) return; // a página vai recarregar
+
         if (!res || !res.ok) {
           apagarToken();
           if (estouNaCall) {
