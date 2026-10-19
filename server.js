@@ -17,6 +17,10 @@ const DIAS_SESSAO = 30;
 const MAX_TENTATIVAS = 5;
 const BLOQUEIO_MS = 60 * 1000;
 
+// Versão do código. No Render, RENDER_GIT_COMMIT muda a cada atualização no GitHub.
+// Quando ela muda, as páginas abertas mostram a tela de atualização e recarregam.
+const VERSAO = process.env.RENDER_GIT_COMMIT || String(Date.now());
+
 // O endereço do banco fica guardado no Render, na variável DATABASE_URL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -80,6 +84,9 @@ function ligarUsuario(socket, conta) {
 }
 
 io.on('connection', (socket) => {
+  // Envia a versão logo ao conectar, para a página saber se o código mudou
+  socket.emit('versao', VERSAO);
+
   const resposta = (responder) => (typeof responder === 'function' ? responder : () => {});
 
   // ===== Criar conta =====
@@ -279,7 +286,7 @@ async function iniciar() {
   `);
 
   const PORT = process.env.PORT || 3000;
-  server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+  server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT} (versão ${VERSAO})`));
 }
 
 iniciar().catch((e) => {
