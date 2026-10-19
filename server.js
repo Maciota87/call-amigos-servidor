@@ -1,8 +1,7 @@
 const express = require('express');
 const http = require('http');
-const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
+const { Pool } = require('pg');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -17,23 +16,20 @@ const MAX_CHARS_CHAT = 500;
 const DIAS_SESSAO = 30;
 const MAX_TENTATIVAS = 5;
 const BLOQUEIO_MS = 60 * 1000;
-const ARQUIVO_CONTAS = path.join(__dirname, 'contas.json');
+
+// O endereço do banco fica guardado no Render, na variável DATABASE_URL
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 5,
+});
+pool.on('error', (e) => console.error('Erro no banco de dados:', e.message));
 
 app.use(express.static('public'));
-
-// ===== Contas =====
-
-let contas = {};
-try {
-  contas = JSON.parse(fs.readFileSync(ARQUIVO_CONTAS, 'utf8'));
-} catch (e) {
-  contas = {};
-}
 
 const sessoes = new Map();     // token -> { chave, expira }
 const tentativas = new Map();  // chave -> { falhas, bloqueadoAte }
 
-// Limpa sessões vencidas de tempos em tempos
 setInterval(() => {
   const agora = Date.now();
   for (const [token, s] of sessoes) {
@@ -41,19 +37,7 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000);
 
-function temConta(chave) {
-  return Object.prototype.hasOwnProperty.call(contas, chave);
-}
-
-function salvarContas() {
-  try {
-    fs.writeFileSync(ARQUIVO_CONTAS, JSON.stringify(contas, null, 2));
-  } catch (e) {
-    console.error('Não foi possível salvar as contas:', e);
-  }
-}
-
-// Remove acentos e põe em maiúsculas: "JOÃO" e "JOAO" viram o mesmo nome
+// Remove acentos e põe em maiúsculas: "JOÃO" e "JOAO" viram o mesmo usuário
 function chaveDe(nome) {
   return String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
 }
@@ -79,73 +63,104 @@ function senhaCorreta(conta, senha) {
   return esperado.length === recebido.length && crypto.timingSafeEqual(esperado, recebido);
 }
 
+async function buscarConta(chave) {
+  const r = await pool.query('SELECT chave, nome, salt, hash FROM contas WHERE chave = $1', [chave]);
+  return r.rows[0] || null;
+}
+
 function criarSessao(chave) {
   const token = crypto.randomBytes(32).toString('hex');
   sessoes.set(token, { chave, expira: Date.now() + DIAS_SESSAO * 24 * 60 * 60 * 1000 });
   return token;
 }
 
-function ligarUsuario(socket, chave) {
-  socket.data.chave = chave;
-  socket.data.nome = contas[chave].nome;
+function ligarUsuario(socket, conta) {
+  socket.data.chave = conta.chave;
+  socket.data.nome = conta.nome;
 }
 
 io.on('connection', (socket) => {
   const resposta = (responder) => (typeof responder === 'function' ? responder : () => {});
 
   // ===== Criar conta =====
-  socket.on('cadastrar', (dados, responder) => {
+  socket.on('cadastrar', async (dados, responder) => {
     const reply = resposta(responder);
-    const nome = String(dados?.usuario || '').trim().toUpperCase();
-    const senha = String(dados?.senha || '');
+    try {
+      const nome = String(dados?.usuario || '').trim().toUpperCase();
+      const senha = String(dados?.senha || '');
 
-    if (!usuarioValido(nome)) return reply({ ok: false, motivo: 'nome' });
-    if (!senhaValida(senha)) return reply({ ok: false, motivo: 'senha' });
+      if (!usuarioValido(nome)) return reply({ ok: false, motivo: 'nome' });
+      if (!senhaValida(senha)) return reply({ ok: false, motivo: 'senha' });
 
-    const chave = chaveDe(nome);
-    if (temConta(chave)) return reply({ ok: false, motivo: 'existe' });
+      const chave = chaveDe(nome);
+      const salt = crypto.randomBytes(16).toString('hex');
+      const hash = gerarHash(senha, salt);
 
-    const salt = crypto.randomBytes(16).toString('hex');
-    contas[chave] = { nome, salt, hash: gerarHash(senha, salt), criadoEm: Date.now() };
-    salvarContas();
+      // ON CONFLICT: se o nome já existir, nada é gravado (impede duas contas com o mesmo nome)
+      const r = await pool.query(
+        `INSERT INTO contas (chave, nome, salt, hash)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (chave) DO NOTHING
+         RETURNING chave`,
+        [chave, nome, salt, hash]
+      );
+      if (r.rowCount === 0) return reply({ ok: false, motivo: 'existe' });
 
-    ligarUsuario(socket, chave);
-    reply({ ok: true, nome, token: criarSessao(chave) });
+      ligarUsuario(socket, { chave, nome });
+      reply({ ok: true, nome, token: criarSessao(chave) });
+    } catch (e) {
+      console.error('Erro ao criar conta:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
   });
 
   // ===== Entrar na conta =====
-  socket.on('entrar', (dados, responder) => {
+  socket.on('entrar', async (dados, responder) => {
     const reply = resposta(responder);
-    const nome = String(dados?.usuario || '').trim().toUpperCase();
-    const senha = String(dados?.senha || '').slice(0, 100);
-    const chave = chaveDe(nome);
+    try {
+      const nome = String(dados?.usuario || '').trim().toUpperCase();
+      const senha = String(dados?.senha || '').slice(0, 100);
+      const chave = chaveDe(nome);
 
-    const t = tentativas.get(chave) || { falhas: 0, bloqueadoAte: 0 };
-    if (t.bloqueadoAte > Date.now()) return reply({ ok: false, motivo: 'bloqueado' });
+      const t = tentativas.get(chave) || { falhas: 0, bloqueadoAte: 0 };
+      if (t.bloqueadoAte > Date.now()) return reply({ ok: false, motivo: 'bloqueado' });
 
-    if (!temConta(chave) || !senhaCorreta(contas[chave], senha)) {
-      t.falhas += 1;
-      if (t.falhas >= MAX_TENTATIVAS) {
-        t.bloqueadoAte = Date.now() + BLOQUEIO_MS;
-        t.falhas = 0;
+      const conta = await buscarConta(chave);
+      if (!conta || !senhaCorreta(conta, senha)) {
+        t.falhas += 1;
+        if (t.falhas >= MAX_TENTATIVAS) {
+          t.bloqueadoAte = Date.now() + BLOQUEIO_MS;
+          t.falhas = 0;
+        }
+        tentativas.set(chave, t);
+        return reply({ ok: false, motivo: 'dados' });
       }
-      tentativas.set(chave, t);
-      return reply({ ok: false, motivo: 'dados' });
-    }
 
-    tentativas.delete(chave);
-    ligarUsuario(socket, chave);
-    reply({ ok: true, nome: contas[chave].nome, token: criarSessao(chave) });
+      tentativas.delete(chave);
+      ligarUsuario(socket, conta);
+      reply({ ok: true, nome: conta.nome, token: criarSessao(chave) });
+    } catch (e) {
+      console.error('Erro ao entrar:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
   });
 
   // ===== Reconectar com a sessão salva no navegador =====
-  socket.on('retomar', (token, responder) => {
+  socket.on('retomar', async (token, responder) => {
     const reply = resposta(responder);
-    const s = sessoes.get(String(token || ''));
-    if (!s || s.expira < Date.now() || !temConta(s.chave)) return reply({ ok: false });
+    try {
+      const s = sessoes.get(String(token || ''));
+      if (!s || s.expira < Date.now()) return reply({ ok: false });
 
-    ligarUsuario(socket, s.chave);
-    reply({ ok: true, nome: socket.data.nome });
+      const conta = await buscarConta(s.chave);
+      if (!conta) return reply({ ok: false });
+
+      ligarUsuario(socket, conta);
+      reply({ ok: true, nome: conta.nome });
+    } catch (e) {
+      console.error('Erro ao retomar sessão:', e.message);
+      reply({ ok: false });
+    }
   });
 
   // ===== Sair da conta =====
@@ -171,8 +186,7 @@ io.on('connection', (socket) => {
     const chave = 'sala:' + nomeSala;
     const sala = io.sockets.adapter.rooms.get(chave);
 
-    // Se a mesma conta já estiver na sala (por exemplo, uma conexão antiga que ainda não caiu),
-    // a conexão antiga é encerrada e a nova assume
+    // Se a mesma conta já estiver na sala em outra aba ou aparelho, a conexão antiga é encerrada
     const substituidos = [];
     if (sala) {
       for (const id of sala) {
@@ -248,5 +262,27 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+// Cria a tabela de contas sozinho, se ela ainda não existir
+async function iniciar() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('A variável DATABASE_URL não está configurada no Render (Environment).');
+  }
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contas (
+      chave TEXT PRIMARY KEY,
+      nome TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+}
+
+iniciar().catch((e) => {
+  console.error('Erro ao iniciar o servidor:', e.message);
+  process.exit(1);
+});
