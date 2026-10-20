@@ -495,6 +495,47 @@ body:has(#call:not([hidden])) .downloads {
       height: 100%;
       object-fit: contain;
     }
+
+        .caps-status { margin: -8px 0 0; font-size: 13px; color: var(--lilas); opacity: .85; }
+    .caps-status.ligado { color: #fbbf24; opacity: 1; font-weight: 500; }
+
+        .topo-usuario { display: flex; align-items: center; gap: 12px; }
+    .topo-usuario .avatar-topo {
+      width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+      background: #4c1d95; color: var(--lilas); display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 500;
+    }
+    .topo-usuario .texto-usuario { display: flex; flex-direction: column; min-width: 0; }
+    .topo-usuario .rotulo { font-size: 12px; opacity: .75; }
+    .topo-usuario #usuarioLogado { font-size: 16px; font-weight: 500; color: var(--branco); }
+    .topo-usuario .btn-sair {
+      margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+      background: transparent; border: 1px solid rgba(196,181,253,.3); color: var(--lilas);
+      border-radius: 10px; padding: 8px 12px; font-size: 13px; cursor: pointer;
+    }
+    .campo-sala { display: flex; flex-direction: column; gap: 8px; }
+    .campo-sala label, .rotulo-secao { font-size: 13px; opacity: .85; }
+    .chips-salas { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chips-salas .btn.pequeno { border-radius: 999px; padding: 7px 14px; font-size: 13px; background: #4a3a63; }
+    .bloco-foto { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 14px; background: #3a2a57; }
+    .bloco-foto .preview-avatar { width: 56px; height: 56px; font-size: 22px; }
+    .bloco-foto .textos { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .bloco-foto .textos small { font-size: 12px; opacity: .75; }
+    .btn-trocar-foto { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; font-size: 13px; }
+    .lista-online { display: flex; flex-direction: column; gap: 8px; }
+    .linha-online { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 12px; background: #3a2a57; }
+    .linha-online .avatar-mini {
+      position: relative; width: 34px; height: 34px; border-radius: 50%; background: #4c1d95; color: var(--lilas);
+      display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; flex-shrink: 0;
+    }
+    .linha-online .avatar-mini .bolinha { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border: 2px solid #3a2a57; }
+    .linha-online .estado { margin-left: auto; font-size: 12px; color: #86efac; }
+    .linha-online .estado.off { color: var(--branco); opacity: .55; }
+    .btn-amigos { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; font-size: 14px; }
+    .badge-verde {
+      display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px;
+      border-radius: 999px; background: #22c55e; color: #0b2e17; font-size: 12px; font-weight: 500; padding: 0 6px;
+    }
     
   </style>
 </head>
@@ -517,6 +558,7 @@ body:has(#call:not([hidden])) .downloads {
     <input id="loginUsuario" maxlength="20" autocomplete="username" oninput="maiusculo(this)" onkeydown="teclaLogin(event)">
     <label for="loginSenha">Senha</label>
     <input id="loginSenha" type="password" maxlength="100" autocomplete="current-password" onkeydown="teclaLogin(event)">
+    <p id="capsStatus" class="caps-status">Caps lock desativado.</p>
     <label class="check-auto" title="Se marcado, você continua logado mesmo depois de fechar o navegador">
       <input type="checkbox" id="autoLogin" checked onchange="salvarPreferenciaAuto(this.checked)">
       Entrar automaticamente
@@ -534,23 +576,45 @@ body:has(#call:not([hidden])) .downloads {
 </div>
   
   <!-- Escolha da sala (depois do login) -->
+   <!-- Escolha da sala (depois do login) -->
   <section id="setup" class="card" hidden>
-    <p class="logado">Logado como <strong id="usuarioLogado"></strong></p>
-    <label for="room">Nome da sala</label>
-    <input id="room" placeholder="Digite o nome da sala" oninput="maiusculo(this)" onkeydown="teclaEntrar(event)">
-    <div class="salas-recentes">
-  <strong>Salas recentes</strong>
-  <div id="listaSalasRecentes" class="lista-amigos"></div>
-</div>
-    <label>Foto de perfil (opcional)</label>
-    <div class="foto-linha">
-      <div id="previewAvatar" class="preview-avatar"><span id="previewInicial">?</span></div>
-      <button class="btn" onclick="escolherAvatar()">🖼️ Escolher imagem</button>
+
+    <div class="topo-usuario">
+      <div id="inicialTopo" class="avatar-topo">?</div>
+      <div class="texto-usuario">
+        <span class="rotulo">Logado como</span>
+        <strong id="usuarioLogado"></strong>
+      </div>
+      <button class="btn-sair" onclick="sairDaConta()"><i class="ti ti-logout" aria-hidden="true"></i>Sair da conta</button>
     </div>
-   
+
+    <div class="campo-sala">
+      <label for="room">Nome da sala</label>
+      <input id="room" placeholder="Digite o nome da sala" oninput="maiusculo(this)" onkeydown="teclaEntrar(event)">
+    </div>
+
+    <div class="campo-sala">
+      <span class="rotulo-secao"><i class="ti ti-history" aria-hidden="true"></i> Salas recentes</span>
+      <div id="listaSalasRecentes" class="chips-salas"></div>
+    </div>
+
+    <div class="bloco-foto">
+      <div id="previewAvatar" class="preview-avatar"><span id="previewInicial">?</span></div>
+      <div class="textos">
+        <span>Foto de perfil</span>
+        <small>Opcional. Seus amigos veem essa foto.</small>
+        <button class="btn btn-trocar-foto" onclick="escolherAvatar()"><i class="ti ti-photo" aria-hidden="true"></i>Trocar imagem</button>
+      </div>
+    </div>
+
+    <div class="campo-sala">
+      <span class="rotulo-secao">Seus amigos</span>
+      <div id="listaOnline" class="lista-online"></div>
+    </div>
+
     <button class="btn primary big" onclick="join()">Entrar na sala</button>
-        <button class="btn" onclick="abrirAmigos()">👥 Amigos</button>
-    <button class="btn" onclick="sairDaConta()">Sair da conta</button>
+    <button class="btn btn-amigos" onclick="abrirAmigos()"><i class="ti ti-users" aria-hidden="true"></i>Amigos<span id="badgeAmigos" class="badge-verde" hidden>0</span></button>
+
   </section>
   <!-- Amigos (abre pelo botão 👥 Amigos na tela de sala) -->
   <section id="amigosPanel" class="card" hidden>
@@ -900,6 +964,20 @@ function recusarConviteSala() {
       $('loginErro').hidden = !texto;
     }
 
+        // ===== Aviso de Caps lock =====
+    function atualizarCapsLock(e) {
+      const ligado = e.getModifierState && e.getModifierState('CapsLock');
+      const texto = $('capsStatus');
+      texto.textContent = ligado
+        ? 'Caps lock ativado: as letras saem em maiúsculas.'
+        : 'Caps lock desativado.';
+      texto.classList.toggle('ligado', !!ligado);
+    }
+
+    ['keydown', 'keyup', 'mousedown'].forEach((evento) => {
+      $('loginSenha').addEventListener(evento, atualizarCapsLock);
+    });
+
     // ===== Login automático =====
     const CHAVE_AUTO = 'morro_auto';
 
@@ -1071,18 +1149,70 @@ setInterval(verificarVersaoAtual, 15000);
       });
     }
 
-    function definirUsuario(nome) {
+        function definirUsuario(nome) {
       meuNome = nome;
       logado = true;
       $('usuarioLogado').textContent = nome;
+      $('inicialTopo').textContent = nome.charAt(0);
       $('previewInicial').textContent = nome.charAt(0);
       $('login').hidden = true;
       $('setup').hidden = false;
       mostrarSalasRecentes();
       carregarAvatarSalvo();
+      carregarAmigosOnline();
       retomarAposAtualizacao();
     }
 
+    // Lista os amigos na tela de entrar. Quem está online fica com a bolinha verde.
+    function carregarAmigosOnline() {
+      if (!logado || !socket.connected) return;
+      socket.emit('amigos-listar', (res) => {
+        if (!res || !res.ok) return;
+
+        const lista = $('listaOnline');
+        const badge = $('badgeAmigos');
+        const amigos = [...res.amigos].sort((a, b) => Number(b.online) - Number(a.online));
+        const online = amigos.filter((a) => a.online).length;
+
+        badge.hidden = online === 0;
+        badge.textContent = String(online);
+        lista.innerHTML = '';
+
+        if (!amigos.length) {
+          const vazio = document.createElement('p');
+          vazio.className = 'dica';
+          vazio.style.margin = '0';
+          vazio.textContent = 'Você ainda não tem amigos.';
+          lista.appendChild(vazio);
+          return;
+        }
+
+        amigos.forEach((amigo) => {
+          const linha = document.createElement('div');
+          linha.className = 'linha-online';
+
+          const avatar = document.createElement('div');
+          avatar.className = 'avatar-mini';
+          avatar.textContent = amigo.nome.charAt(0);
+          const bolinha = document.createElement('span');
+          bolinha.className = 'bolinha' + (amigo.online ? ' online' : '');
+          avatar.appendChild(bolinha);
+
+          const nome = document.createElement('span');
+          nome.textContent = amigo.nome;
+
+          const estado = document.createElement('span');
+          estado.className = 'estado' + (amigo.online ? '' : ' off');
+          estado.textContent = amigo.online ? 'Online' : 'Offline';
+
+          linha.append(avatar, nome, estado);
+          lista.appendChild(linha);
+        });
+      });
+    }
+
+    socket.on('amigo-status', carregarAmigosOnline);
+    socket.on('amizade-atualizada', carregarAmigosOnline);
     function mostrarTelaLogin() {
       logado = false;
       meuNome = '';
