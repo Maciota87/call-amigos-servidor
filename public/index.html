@@ -2194,11 +2194,11 @@ function salvarSalaRecente(sala) {
       document.addEventListener(ev, liberarSom, { passive: true });
     });
 
-        // Mantém o áudio ligado: se o navegador pausar o som, ele volta sozinho
+            // Mantém o áudio ligado: se o navegador pausar o som, ele volta sozinho
     setInterval(() => {
       if (audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
     }, 2000);
-
+    
     function prepararAudio() {
      if (!audioCtx) audioCtx = new AudioContext();
       mixDest = audioCtx.createMediaStreamDestination();
