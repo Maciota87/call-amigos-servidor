@@ -419,7 +419,53 @@ io.on('connection', (socket) => {
     });
     reply({ ok: true });
   });
+  socket.on('perfil-carregar', async (responder) => {
+    const reply = resposta(responder);
+    if (!socket.data.chave) return reply({ ok: false, motivo: 'login' });
 
+    try {
+      const resultado = await pool.query(
+        'SELECT dados FROM perfis WHERE chave = $1',
+        [socket.data.chave]
+      );
+
+      reply({
+        ok: true,
+        perfil: resultado.rows[0]?.dados || {},
+      });
+    } catch (e) {
+      console.error('Erro ao carregar perfil:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
+  });
+
+  socket.on('perfil-salvar-avatar', async (avatar, responder) => {
+    const reply = resposta(responder);
+    if (!socket.data.chave) return reply({ ok: false, motivo: 'login' });
+
+    if (
+      typeof avatar !== 'string' ||
+      avatar.length > 300000 ||
+      !/^data:image\/jpeg;base64,/i.test(avatar)
+    ) {
+      return reply({ ok: false, motivo: 'imagem' });
+    }
+
+    try {
+      await pool.query(
+        `INSERT INTO perfis (chave, dados)
+         VALUES ($1, jsonb_build_object('avatar', $2::text))
+         ON CONFLICT (chave)
+         DO UPDATE SET dados = perfis.dados || EXCLUDED.dados`,
+        [socket.data.chave, avatar]
+      );
+
+      reply({ ok: true });
+    } catch (e) {
+      console.error('Erro ao salvar foto de perfil:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
+  });
    socket.on('disconnect', () => {
     if (socket.data.room) {
       socket.to(socket.data.room).emit('user-left', socket.id);
