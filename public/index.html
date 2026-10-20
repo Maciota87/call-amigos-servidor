@@ -451,6 +451,51 @@
 body:has(#call:not([hidden])) .downloads {
   display: none !important;
 }
+
+    /* ===== Organização da chamada ===== */
+    .barra-topo {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+      gap: 10px 14px; max-width: 1600px; margin: 10px auto 4px;
+    }
+    .barra-topo .sala-badge { margin: 0; }
+    .barra-topo #status { display: block; margin: 0; }
+
+    /* Sem desfoque na barra: o desfoque fazia os menus do celular abrirem no lugar errado */
+    #controls {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      gap: 10px 14px;
+    }
+    .grupo-controles {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    }
+    .grupo-controles .btn { white-space: nowrap; }
+    .separador-controles {
+      width: 1px; align-self: stretch; min-height: 36px;
+      background: rgba(196, 181, 253, .25);
+    }
+
+    @media (max-width: 700px) {
+      .separador-controles { display: none; }
+      .grupo-controles { width: 100%; }
+    }
+
+    /* Tela cheia de um quadro: ocupa o monitor inteiro */
+    .tile:fullscreen {
+      width: 100%;
+      height: 100%;
+      aspect-ratio: auto;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      background: #0a0414;
+    }
+    .tile:fullscreen video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
   </style>
 </head>
 <body>
@@ -526,40 +571,22 @@ body:has(#call:not([hidden])) .downloads {
 
     <button class="btn" onclick="voltarDeAmigos()">⬅️ Voltar</button>
   </section>
-  <!-- Chamada -->
+    <!-- Chamada -->
   <section id="call" hidden>
-    <div class="sala-badge">🏠 Sala: <strong id="salaNome"></strong><span class="sep">·</span>⏱️ <strong id="timer" title="Tempo de chamada">00:00</strong></div>
-    <p id="status">Conectando...</p>
+    <div class="barra-topo">
+      <div class="sala-badge">🏠 Sala: <strong id="salaNome"></strong><span class="sep">·</span>⏱️ <strong id="timer" title="Tempo de chamada">00:00</strong></div>
+      <p id="status">Conectando...</p>
+    </div>
+
     <div id="grid"></div>
 
-    <nav id="controls">
-      <button class="btn" onclick="abrirPainelConvite()">👥 Convidar amigo</button>
-      
-      <div class="split">
-        <button id="micBtn" class="btn principal" onclick="toggleMic()">🎤 Microfone</button>
-        <button class="btn caret" onclick="toggleMenu('mic')" title="Escolher microfone">▲</button>
-        <div id="menu-mic" class="menu" hidden></div>
-      </div>
-
-      <div class="split">
-        <button id="foneBtn" class="btn principal" onclick="toggleFone()">🎧 Fone</button>
-        <button id="spkCaret" class="btn caret" onclick="toggleMenu('spk')" title="Escolher fone ou saída de áudio">▲</button>
-        <div id="menu-spk" class="menu" hidden></div>
-      </div>
-
-      <button id="shareBtn" class="btn destaque" onclick="toggleShare()">🖥️ Compartilhar tela</button>
-      <button id="musicToggleBtn" class="btn" onclick="togglePainelMusica()">🎵 Música</button>
-      <button id="chatBtn" class="btn" onclick="toggleChat()">💬 Chat<span id="chatBadge" class="badge" hidden>0</span></button>
-      <button class="btn danger" onclick="sairDaCall()">📞 Sair da chamada</button>
-    </nav>
-    
     <div id="painelConviteAmigo" class="painel-convite" hidden>
-  <div class="painel-convite-topo">
-    <strong>Convidar um amigo</strong>
-    <button class="btn pequeno" onclick="fecharPainelConvite()">Fechar</button>
-  </div>
-  <div id="amigosParaConvidar" class="lista-amigos"></div>
-</div>
+      <div class="painel-convite-topo">
+        <strong>Convidar um amigo</strong>
+        <button class="btn pequeno" onclick="fecharPainelConvite()">Fechar</button>
+      </div>
+      <div id="amigosParaConvidar" class="lista-amigos"></div>
+    </div>
 
     <div id="musicPanel" hidden>
       <span id="musicNome">Nenhuma música escolhida</span>
@@ -570,6 +597,37 @@ body:has(#call:not([hidden])) .downloads {
       <label for="musicVolume">Volume da música</label>
       <input type="range" id="musicVolume" min="0" max="100" value="60" oninput="ajustarVolumeMusica(this.value)">
     </div>
+
+    <nav id="controls">
+      <div class="grupo-controles">
+        <div class="split">
+          <button id="micBtn" class="btn principal" onclick="toggleMic()">🎤 Microfone</button>
+          <button class="btn caret" onclick="toggleMenu('mic')" title="Escolher microfone">▲</button>
+          <div id="menu-mic" class="menu" hidden></div>
+        </div>
+        <div class="split">
+          <button id="foneBtn" class="btn principal" onclick="toggleFone()">🎧 Fone</button>
+          <button id="spkCaret" class="btn caret" onclick="toggleMenu('spk')" title="Escolher fone ou saída de áudio">▲</button>
+          <div id="menu-spk" class="menu" hidden></div>
+        </div>
+      </div>
+
+      <span class="separador-controles"></span>
+
+      <div class="grupo-controles">
+        <button id="shareBtn" class="btn destaque" onclick="toggleShare()">🖥️ Compartilhar tela</button>
+        <button id="btnTelaCheia" class="btn" onclick="telaCheiaDoQuadro(event)">⛶ Tela cheia</button>
+        <button id="musicToggleBtn" class="btn" onclick="togglePainelMusica()">🎵 Música</button>
+        <button class="btn" onclick="abrirPainelConvite()">👥 Convidar</button>
+        <button id="chatBtn" class="btn" onclick="toggleChat()">💬 Chat<span id="chatBadge" class="badge" hidden>0</span></button>
+      </div>
+
+      <span class="separador-controles"></span>
+
+      <div class="grupo-controles">
+        <button class="btn danger" onclick="sairDaCall()">📞 Sair da chamada</button>
+      </div>
+    </nav>
 
     <p class="dica" id="dicaCelular">Clique em um vídeo para colocá-lo em destaque. Cada amigo tem botões para mutar e ajustar o volume. Até 10 pessoas por sala. Use fone de ouvido para evitar eco.</p>
   </section>
@@ -2513,21 +2571,28 @@ function salvarSalaRecente(sala) {
       $('shareBtn').classList.remove('ativo');
     }
 
-    // ===== Tela cheia (ocupa o monitor inteiro) =====
-
-    function toggleFull() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {
-          alert('Seu navegador não permitiu a tela cheia.');
-        });
-      } else {
+       // Tela cheia do quadro: o que você clicou, ou o quadro em destaque se vier da barra
+    function telaCheiaDoQuadro(e) {
+      if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
+        return;
       }
+      const quadro = e && e.currentTarget && e.currentTarget.closest ? e.currentTarget.closest('.tile') : null;
+      const alvo = quadro || document.querySelector('.tile.focus') || $('tile-me');
+      if (!alvo) return;
+      alvo.requestFullscreen().catch(() => {
+        alert('Seu navegador não permitiu a tela cheia.');
+      });
     }
 
-    document.addEventListener('fullscreenchange', () => {
+    function toggleFull(e) {
+      telaCheiaDoQuadro(e);
+    }
+
+        document.addEventListener('fullscreenchange', () => {
       const cheia = !!document.fullscreenElement;
-      document.body.classList.toggle('tela-cheia', cheia);
+      document.body.classList.remove('tela-cheia');
+      $('btnTelaCheia').textContent = cheia ? '🔲 Sair da tela cheia' : '⛶ Tela cheia';
       document.querySelectorAll('.btn-full').forEach((b) => {
         b.textContent = cheia ? '🔲' : '⛶';
         b.title = cheia ? 'Sair da tela cheia' : 'Tela cheia';
