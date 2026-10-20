@@ -2587,9 +2587,8 @@ function salvarSalaRecente(sala) {
     }
 
 function sairDaCall() {
-  somSair();
   sessionStorage.removeItem('morro_retomar');
-  setTimeout(() => location.reload(), 450);
+  location.reload();
 }
     
   </script>
