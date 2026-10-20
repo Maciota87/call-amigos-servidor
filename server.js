@@ -21,6 +21,11 @@ const BLOQUEIO_MS = 60 * 1000;
 // Quando ela muda, as páginas abertas mostram a tela de atualização e recarregam.
 const VERSAO = process.env.RENDER_GIT_COMMIT || String(Date.now());
 
+app.get('/versao-atual', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ versao: VERSAO });
+});
+
 // O endereço do banco fica guardado no Render, na variável DATABASE_URL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
