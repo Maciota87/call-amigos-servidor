@@ -33,6 +33,7 @@ app.use(express.static('public'));
 
 const sessoes = new Map();     // token -> { chave, expira }
 const tentativas = new Map();  // chave -> { falhas, bloqueadoAte }
+const convitesSala = new Map();
 
 setInterval(() => {
   const agora = Date.now();
@@ -339,7 +340,94 @@ io.on('connection', (socket) => {
       reply({ ok: false, motivo: 'erro' });
     }
   });
+  
   // ===== Entrar na sala =====
+    socket.on('convidar-amigo', async (usuario, responder) => {
+    const reply = resposta(responder);
+    const eu = socket.data.chave;
+    const sala = socket.data.room;
+
+    if (!eu) return reply({ ok: false, motivo: 'login' });
+    if (!sala || !sala.startsWith('sala:')) {
+      return reply({ ok: false, motivo: 'fora-da-sala' });
+    }
+
+    try {
+      const amigo = chaveDe(usuario);
+      if (!amigo || amigo === eu) {
+        return reply({ ok: false, motivo: 'usuario' });
+      }
+
+      const amizade = await pool.query(
+        `SELECT 1 FROM amizades
+         WHERE status = 'aceito'
+           AND ((solicitante = $1 AND destinatario = $2)
+             OR (solicitante = $2 AND destinatario = $1))`,
+        [eu, amigo]
+      );
+
+      if (!amizade.rowCount) {
+        return reply({ ok: false, motivo: 'nao-amigo' });
+      }
+
+      const conexoesAmigo = socketsDaConta(amigo).filter((s) => !s.data.room);
+      if (!conexoesAmigo.length) {
+        return reply({ ok: false, motivo: 'offline' });
+      }
+
+      const id = crypto.randomBytes(12).toString('hex');
+      const convite = {
+        id,
+        de: eu,
+        nome: socket.data.nome,
+        para: amigo,
+        socketOrigem: socket.id,
+        sala: sala.slice('sala:'.length),
+        expiraEm: Date.now() + 20_000,
+      };
+
+      convitesSala.set(id, convite);
+
+      conexoesAmigo.forEach((conexao) => {
+        conexao.emit('convite-sala', {
+          id,
+          nome: convite.nome,
+          sala: convite.sala,
+          expiraEm: convite.expiraEm,
+        });
+      });
+
+      setTimeout(() => convitesSala.delete(id), 20_000);
+      reply({ ok: true });
+    } catch (e) {
+      console.error('Erro ao convidar amigo para a sala:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
+  });
+
+  socket.on('responder-convite-sala', (dados, responder) => {
+    const reply = resposta(responder);
+    const convite = convitesSala.get(String(dados?.id || ''));
+
+    if (!convite || convite.para !== socket.data.chave || convite.expiraEm <= Date.now()) {
+      if (convite) convitesSala.delete(convite.id);
+      return reply({ ok: false, motivo: 'expirado' });
+    }
+
+    if (!dados.aceitar) {
+      convitesSala.delete(convite.id);
+      return reply({ ok: true, aceito: false });
+    }
+
+    const pessoaQueConvidou = io.sockets.sockets.get(convite.socketOrigem);
+    if (!pessoaQueConvidou || pessoaQueConvidou.data.room !== `sala:${convite.sala}`) {
+      convitesSala.delete(convite.id);
+      return reply({ ok: false, motivo: 'sala-fechada' });
+    }
+
+    convitesSala.delete(convite.id);
+    reply({ ok: true, aceito: true, sala: convite.sala });
+  });
   socket.on('join-room', async (room, responder) => {
     const reply = resposta(responder);
     if (!socket.data.chave) return reply({ ok: false, motivo: 'login' });
