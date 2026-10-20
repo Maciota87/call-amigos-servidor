@@ -339,6 +339,114 @@
   display: flex;
   gap: 8px;
 }
+    /* Visual renovado da sala */
+#call {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 12px 18px 24px;
+}
+
+.sala-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 10px auto;
+  padding: 11px 20px;
+  border: 1px solid rgba(196, 181, 253, .24);
+  background: rgba(46, 31, 74, .88);
+  backdrop-filter: blur(12px);
+}
+
+#status {
+  display: table;
+  margin: 10px auto;
+  padding: 7px 14px;
+  border: 1px solid rgba(196, 181, 253, .15);
+  border-radius: 999px;
+  background: rgba(20, 10, 35, .7);
+}
+
+#grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 16px;
+  align-content: center;
+  min-height: 58vh;
+  padding: 14px 0;
+}
+
+.tile {
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 16 / 10;
+  border: 1px solid rgba(196, 181, 253, .2);
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .38);
+}
+
+.tile:hover {
+  border-color: var(--lilas-claro);
+  box-shadow: 0 0 0 2px rgba(167, 139, 250, .22),
+              0 12px 32px rgba(0, 0, 0, .45);
+}
+
+.tile.focus {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: min(70vh, 820px);
+  aspect-ratio: auto;
+}
+
+#controls {
+  z-index: 20;
+  width: fit-content;
+  max-width: calc(100% - 20px);
+  margin: 16px auto 10px;
+  padding: 12px 16px;
+  border: 1px solid rgba(196, 181, 253, .22);
+  border-radius: 20px;
+  background: rgba(26, 11, 46, .92);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .4);
+}
+
+#controls .btn {
+  min-height: 44px;
+}
+
+@media (max-width: 700px) {
+  #call {
+    padding: 8px 10px 18px;
+  }
+
+  #grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    min-height: 45vh;
+  }
+
+  .tile {
+    aspect-ratio: 16 / 10;
+  }
+
+  .tile.focus {
+    height: 45vh;
+  }
+
+  #controls {
+    width: 100%;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  #controls .btn {
+    flex: 1 1 auto;
+    padding: 10px 12px;
+    font-size: .9rem;
+  }
+}
   </style>
 </head>
 <body>
@@ -563,6 +671,7 @@ function enviarConviteSala(chaveAmigo) {
 }
 
 socket.on('convite-sala', (convite) => {
+  somConvite();
   conviteAtual = convite;
   $('conviteTexto').textContent =
     `${convite.nome} convidou você para a sala ${convite.sala}.`;
@@ -661,6 +770,7 @@ function recusarConviteSala() {
     let ultimoArquivoAvatar = null;
 
     let audioCtx = null;
+    let notificacaoAudioCtx = null;
     let mixDest = null;
     let sendAudioTrack = null;
     let musicGain = null;
@@ -1139,6 +1249,7 @@ setInterval(verificarVersaoAtual, 15000);
       }
 
       if (ativa && !jaEstava) somCompartilhar();
+      if (!ativa && jaEstava) somPararCompartilhamento();
     }
 
     // Botões em cima do vídeo da transmissão: resolução (quem compartilha), volume e tela cheia
@@ -1335,6 +1446,56 @@ setInterval(verificarVersaoAtual, 15000);
         osc.stop(t0 + duracao + 0.05);
       });
     }
+    // Desbloqueia o som após a primeira interação com a página.
+document.addEventListener('click', () => {
+  const AudioContextDisponivel = window.AudioContext || window.webkitAudioContext;
+  if (!notificacaoAudioCtx && AudioContextDisponivel) {
+    notificacaoAudioCtx = new AudioContextDisponivel();
+  }
+  if (notificacaoAudioCtx?.state === 'suspended') {
+    notificacaoAudioCtx.resume().catch(() => {});
+  }
+}, { once: true });
+
+function tocarSomNotificacao(notas) {
+  const ctx = audioCtx || notificacaoAudioCtx;
+  if (!ctx) return;
+
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+  const agora = ctx.currentTime;
+
+  notas.forEach(({ freq, inicio, duracao }) => {
+    const oscilador = ctx.createOscillator();
+    const volume = ctx.createGain();
+    const inicioNota = agora + inicio;
+
+    oscilador.type = 'sine';
+    oscilador.frequency.value = freq;
+    volume.gain.setValueAtTime(0.0001, inicioNota);
+    volume.gain.exponentialRampToValueAtTime(0.22, inicioNota + 0.02);
+    volume.gain.exponentialRampToValueAtTime(0.0001, inicioNota + duracao);
+
+    oscilador.connect(volume);
+    volume.connect(ctx.destination);
+    oscilador.start(inicioNota);
+    oscilador.stop(inicioNota + duracao + 0.05);
+  });
+}
+
+function somConvite() {
+  tocarSomNotificacao([
+    { freq: 740, inicio: 0, duracao: 0.16 },
+    { freq: 988, inicio: 0.18, duracao: 0.3 },
+  ]);
+}
+
+function somPararCompartilhamento() {
+  tocarSomNotificacao([
+    { freq: 660, inicio: 0, duracao: 0.17 },
+    { freq: 440, inicio: 0.18, duracao: 0.3 },
+  ]);
+}
 
     // Entrou: dois tons subindo
     function somEntrar() {
