@@ -1287,7 +1287,7 @@
     async function usarArquivoAvatar(arquivo) {
       ultimoArquivoAvatar = arquivo;
       try {
-        meuAvatar = await reduzirImagem(arquivo, 300, $('modoAvatar').value);
+        meuAvatar = await reduzirImagem(arquivo, 300, 'cortar');
       } catch (err) {
         alert('Não consegui abrir essa imagem. Tente outra, de preferência em JPG ou PNG.');
         return;
