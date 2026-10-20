@@ -344,7 +344,11 @@
   <section id="setup" class="card" hidden>
     <p class="logado">Logado como <strong id="usuarioLogado"></strong></p>
     <label for="room">Nome da sala</label>
-    <input id="room" placeholder="ex: BINGO-DA-GALERA" oninput="maiusculo(this)" onkeydown="teclaEntrar(event)">
+    <input id="room" placeholder="Digite o nome da sala" oninput="maiusculo(this)" onkeydown="teclaEntrar(event)">
+    <div class="salas-recentes">
+  <strong>Salas recentes</strong>
+  <div id="listaSalasRecentes" class="lista-amigos"></div>
+</div>
     <label>Foto de perfil (opcional)</label>
     <div class="foto-linha">
       <div id="previewAvatar" class="preview-avatar"><span id="previewInicial">?</span></div>
@@ -700,6 +704,7 @@
       $('previewInicial').textContent = nome.charAt(0);
       $('login').hidden = true;
       $('setup').hidden = false;
+      mostrarSalasRecentes();
       carregarAvatarSalvo();
       retomarAposAtualizacao();
     }
@@ -785,10 +790,11 @@
     function entrarNaSala() {
       socket.emit('join-room', minhaSala, (res) => {
         if (res && res.ok) {
-          entrouNoServidor = true;
-          atualizarStatus();
-          return;
-        }
+  entrouNoServidor = true;
+  salvarSalaRecente(minhaSala);
+  atualizarStatus();
+  return;
+}
         const msgs = {
           cheia: `Essa sala já tem ${MAX_PESSOAS} pessoas. Escolha outro nome de sala.`,
           login: 'Sua sessão expirou. Entre na conta de novo.',
@@ -1261,7 +1267,52 @@
         }
       });
     }
+function mostrarSalasRecentes() {
+  const lista = $('listaSalasRecentes');
+  if (!lista) return;
 
+  let salas = [];
+  try {
+    salas = JSON.parse(localStorage.getItem('morro_salas_recentes') || '[]');
+  } catch (e) {
+    salas = [];
+  }
+
+  lista.innerHTML = '';
+
+  if (!salas.length) {
+    lista.innerHTML = '<p class="dica">As salas que você entrar aparecerão aqui.</p>';
+    return;
+  }
+
+  salas.forEach((sala) => {
+    const botao = document.createElement('button');
+    botao.className = 'btn pequeno';
+    botao.textContent = sala;
+    botao.title = `Selecionar sala ${sala}`;
+    botao.onclick = () => {
+      $('room').value = sala;
+      $('room').focus();
+    };
+    lista.appendChild(botao);
+  });
+}
+
+function salvarSalaRecente(sala) {
+  sala = String(sala || '').trim().toUpperCase();
+  if (!sala) return;
+
+  let salas = [];
+  try {
+    salas = JSON.parse(localStorage.getItem('morro_salas_recentes') || '[]');
+  } catch (e) {
+    salas = [];
+  }
+
+  salas = [sala, ...salas.filter((item) => item !== sala)].slice(0, 8);
+  localStorage.setItem('morro_salas_recentes', JSON.stringify(salas));
+  mostrarSalasRecentes();
+}
     function escolherAvatar() {
       $('avatarFile').click();
     }
