@@ -550,7 +550,7 @@ body:has(#call:not([hidden])) .downloads {
       <button id="shareBtn" class="btn destaque" onclick="toggleShare()">🖥️ Compartilhar tela</button>
       <button id="musicToggleBtn" class="btn" onclick="togglePainelMusica()">🎵 Música</button>
       <button id="chatBtn" class="btn" onclick="toggleChat()">💬 Chat<span id="chatBadge" class="badge" hidden>0</span></button>
-      <button class="btn danger" onclick="location.reload()">📞 Sair da chamada</button>
+      <button class="btn danger" onclick="sairDaCall()">📞 Sair da chamada</button>
     </nav>
     
     <div id="painelConviteAmigo" class="painel-convite" hidden>
@@ -1071,6 +1071,13 @@ setInterval(verificarVersaoAtual, 15000);
       });
     });
 
+socket.on('room-sound', (tipo) => {
+  if (tipo === 'entrar') somEntrar();
+  if (tipo === 'sair') somSair();
+  if (tipo === 'compartilhar') somCompartilhar();
+  if (tipo === 'parar-compartilhamento') somPararCompartilhamento();
+});
+    
     socket.on('derrubado', () => {
       derrubado = true;
     });
@@ -1081,7 +1088,7 @@ setInterval(verificarVersaoAtual, 15000);
       if (derrubado) {
         alert('Esta conta entrou na sala em outro aparelho ou aba. Esta janela será atualizada.');
         return location.reload();
-      }
+      }     
       if (!estouNaCall) return;
 
       $('status').textContent = 'Conexão caiu. Reconectando...';
@@ -1093,6 +1100,8 @@ setInterval(verificarVersaoAtual, 15000);
       }
     });
 
+
+    
     // ===== Entrar na sala =====
 
     function atualizarStatus() {
@@ -1251,9 +1260,7 @@ setInterval(verificarVersaoAtual, 15000);
         div.classList.toggle('compartilhando', ativa);
         if (ativa) focarTile(div);
       }
-
-      if (ativa && !jaEstava) somCompartilhar();
-      if (!ativa && jaEstava) somPararCompartilhamento();
+    
     }
 
     // Botões em cima do vídeo da transmissão: resolução (quem compartilha), volume e tela cheia
@@ -2292,7 +2299,6 @@ function salvarSalaRecente(sala) {
     socket.on('user-joined', ({ id, name }) => {
       nomes.set(id, name);
       createPC(id, name);
-      somEntrar();
       adicionarMensagemSistema(`${name} entrou na sala`);
       reajustarTodos();
       atualizarStatus();
@@ -2309,7 +2315,7 @@ function salvarSalaRecente(sala) {
       avatarsRemotos.delete(id);
 
       if (existia) {
-        somSair();
+       
         if (nome) adicionarMensagemSistema(`${nome} saiu da sala`);
       }
       reajustarTodos();
@@ -2355,6 +2361,8 @@ function salvarSalaRecente(sala) {
 
         meVideo.srcObject = new MediaStream([screenTrack]);
         definirTela('me', true);
+        
+        socket.emit('room-sound-request', 'compartilhar');
 
         peers.forEach((p, id) => {
           p.videoSender.replaceTrack(screenTrack).catch(() => {});
@@ -2402,6 +2410,8 @@ function salvarSalaRecente(sala) {
 
       meVideo.srcObject = null;
       definirTela('me', false);
+
+      socket.emit('room-sound-request', 'parar-compartilhamento');
 
       peers.forEach((p, id) => {
         p.videoSender.replaceTrack(null).catch(() => {});
@@ -2575,6 +2585,12 @@ function salvarSalaRecente(sala) {
     if (window.matchMedia('(max-width: 600px)').matches) {
       $('dicaCelular').textContent = 'Toque em um vídeo para colocá-lo em destaque. Cada amigo tem botões para mutar e ajustar o volume. Até 10 pessoas por sala. Compartilhar tela só funciona em computadores e em alguns celulares Android.';
     }
+
+function sairDaCall() {
+  somSair();
+  setTimeout(() => location.reload(), 450);
+}
+    
   </script>
 </body>
 </html>
