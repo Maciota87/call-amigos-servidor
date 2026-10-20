@@ -1153,8 +1153,16 @@ socket.on('room-sound', (tipo) => {
       }
 
       prepararAudio();
-      if (micTrack) criarAnalisador('me', micTrack);
-      iniciarLoopFala();
+
+if (audioCtx.state === 'suspended') {
+  try {
+    await audioCtx.resume();
+  } catch (erro) {
+    console.error('Não consegui ativar o áudio:', erro);
+  }
+}
+
+if (micTrack) criarAnalisador('me', micTrack);
 
       minhaSala = sala;
       estouNaCall = true;
