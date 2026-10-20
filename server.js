@@ -81,8 +81,51 @@ function criarSessao(chave) {
 function ligarUsuario(socket, conta) {
   socket.data.chave = conta.chave;
   socket.data.nome = conta.nome;
+  avisarStatus(conta.chave);
+}
+// ===== Presença (quem está online) e amizades =====
+
+// Todas as conexões abertas de uma conta
+function socketsDaConta(chave) {
+  const lista = [];
+  for (const s of io.sockets.sockets.values()) {
+    if (s.data.chave === chave) lista.push(s);
+  }
+  return lista;
 }
 
+// A conta está online se tiver alguma conexão aberta (ignora a conexão que está saindo)
+function estaOnline(chave, excluirId) {
+  return socketsDaConta(chave).some((s) => s.id !== excluirId);
+}
+
+// Chaves dos amigos aceitos de uma conta
+async function amigosDe(chave) {
+  const r = await pool.query(
+    `SELECT CASE WHEN solicitante = $1 THEN destinatario ELSE solicitante END AS chave
+     FROM amizades
+     WHERE status = 'aceito' AND (solicitante = $1 OR destinatario = $1)`,
+    [chave]
+  );
+  return r.rows.map((x) => x.chave);
+}
+
+// Avisa os amigos de uma conta quando ela fica online ou offline
+function avisarStatus(chave, excluirId) {
+  const online = estaOnline(chave, excluirId);
+  amigosDe(chave)
+    .then((lista) => {
+      lista.forEach((amigo) => {
+        socketsDaConta(amigo).forEach((s) => s.emit('amigo-status', { chave, online }));
+      });
+    })
+    .catch((e) => console.error('Erro ao avisar status:', e.message));
+}
+
+// Avisa as contas indicadas para atualizarem a lista de amigos
+function avisarAmizade(chaves) {
+  chaves.forEach((c) => socketsDaConta(c).forEach((s) => s.emit('amizade-atualizada')));
+}
 io.on('connection', (socket) => {
   // Envia a versão logo ao conectar, para a página saber se o código mudou
   socket.emit('versao', VERSAO);
@@ -176,11 +219,126 @@ io.on('connection', (socket) => {
     if (socket.data.room) return reply({ ok: false, motivo: 'em_sala' });
 
     sessoes.delete(String(token || ''));
+    if (socket.data.chave) avisarStatus(socket.data.chave, socket.id);
     socket.data.chave = null;
     socket.data.nome = null;
     reply({ ok: true });
   });
+  // ===== Amigos =====
 
+  // Lista de amigos (com online), pedidos recebidos e pedidos enviados
+  socket.on('amigos-listar', async (responder) => {
+    const reply = resposta(responder);
+    const eu = socket.data.chave;
+    if (!eu) return reply({ ok: false, motivo: 'login' });
+    try {
+      const r = await pool.query(
+        `SELECT a.solicitante, a.destinatario, a.status, c.nome, p.dados
+         FROM amizades a
+         JOIN contas c ON c.chave = (CASE WHEN a.solicitante = $1 THEN a.destinatario ELSE a.solicitante END)
+         LEFT JOIN perfis p ON p.chave = c.chave
+         WHERE a.solicitante = $1 OR a.destinatario = $1
+         ORDER BY c.nome`,
+        [eu]
+      );
+      const amigos = [];
+      const recebidos = [];
+      const enviados = [];
+      r.rows.forEach((x) => {
+        const outro = x.solicitante === eu ? x.destinatario : x.solicitante;
+        const item = { chave: outro, nome: x.nome, perfil: x.dados || {} };
+        if (x.status === 'aceito') amigos.push({ ...item, online: estaOnline(outro) });
+        else if (x.destinatario === eu) recebidos.push(item);
+        else enviados.push(item);
+      });
+      reply({ ok: true, amigos, recebidos, enviados });
+    } catch (e) {
+      console.error('Erro ao listar amigos:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
+  });
+
+  // Envia um pedido de amizade
+  socket.on('amigo-pedir', async (usuario, responder) => {
+    const reply = resposta(responder);
+    const eu = socket.data.chave;
+    if (!eu) return reply({ ok: false, motivo: 'login' });
+    try {
+      const alvo = chaveDe(usuario);
+      if (!alvo) return reply({ ok: false, motivo: 'nao_existe' });
+      if (alvo === eu) return reply({ ok: false, motivo: 'proprio' });
+
+      const conta = await buscarConta(alvo);
+      if (!conta) return reply({ ok: false, motivo: 'nao_existe' });
+
+      const existe = await pool.query(
+        `SELECT status FROM amizades
+         WHERE (solicitante = $1 AND destinatario = $2) OR (solicitante = $2 AND destinatario = $1)`,
+        [eu, alvo]
+      );
+      if (existe.rowCount > 0) {
+        return reply({ ok: false, motivo: existe.rows[0].status === 'aceito' ? 'ja_amigo' : 'ja_pedido' });
+      }
+
+      await pool.query(
+        `INSERT INTO amizades (solicitante, destinatario, status) VALUES ($1, $2, 'pendente')`,
+        [eu, alvo]
+      );
+      avisarAmizade([alvo]);
+      reply({ ok: true, nome: conta.nome });
+    } catch (e) {
+      console.error('Erro ao pedir amizade:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
+  });
+
+  // Aceita ou recusa um pedido que você recebeu
+  socket.on('amigo-responder', async (dados, responder) => {
+    const reply = resposta(responder);
+    const eu = socket.data.chave;
+    if (!eu) return reply({ ok: false, motivo: 'login' });
+    try {
+      const quem = chaveDe(dados && dados.usuario);
+      if (dados && dados.aceitar) {
+        await pool.query(
+          `UPDATE amizades SET status = 'aceito'
+           WHERE solicitante = $1 AND destinatario = $2 AND status = 'pendente'`,
+          [quem, eu]
+        );
+      } else {
+        await pool.query(
+          `DELETE FROM amizades
+           WHERE solicitante = $1 AND destinatario = $2 AND status = 'pendente'`,
+          [quem, eu]
+        );
+      }
+      avisarAmizade([quem, eu]);
+      reply({ ok: true });
+    } catch (e) {
+      console.error('Erro ao responder pedido:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
+  });
+
+  // Remove um amigo ou cancela um pedido (enviado ou recebido)
+  socket.on('amigo-remover', async (usuario, responder) => {
+    const reply = resposta(responder);
+    const eu = socket.data.chave;
+    if (!eu) return reply({ ok: false, motivo: 'login' });
+    try {
+      const outro = chaveDe(usuario);
+      await pool.query(
+        `DELETE FROM amizades
+         WHERE (solicitante = $1 AND destinatario = $2) OR (solicitante = $2 AND destinatario = $1)`,
+        [eu, outro]
+      );
+      avisarAmizade([outro, eu]);
+      reply({ ok: true });
+    } catch (e) {
+      console.error('Erro ao remover amigo:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
+  });
   // ===== Entrar na sala =====
   socket.on('join-room', (room, responder) => {
     const reply = resposta(responder);
@@ -262,10 +420,11 @@ io.on('connection', (socket) => {
     reply({ ok: true });
   });
 
-  socket.on('disconnect', () => {
+   socket.on('disconnect', () => {
     if (socket.data.room) {
       socket.to(socket.data.room).emit('user-left', socket.id);
     }
+    if (socket.data.chave) avisarStatus(socket.data.chave, socket.id);
   });
 });
 
@@ -284,7 +443,22 @@ async function iniciar() {
       criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS amizades (
+      solicitante TEXT NOT NULL,
+      destinatario TEXT NOT NULL,
+      status TEXT NOT NULL,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (solicitante, destinatario)
+    )
+  `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS perfis (
+      chave TEXT PRIMARY KEY,
+      dados JSONB NOT NULL DEFAULT '{}'::jsonb
+    )
+  `);
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT} (versão ${VERSAO})`));
 }
