@@ -803,6 +803,28 @@ function recusarConviteSala() {
       if (v !== versaoAtual) iniciarAtualizacao();
     });
 
+async function verificarVersaoAtual() {
+  try {
+    const resposta = await fetch(`/versao-atual?tempo=${Date.now()}`, {
+      cache: 'no-store',
+    });
+    if (!resposta.ok) return;
+
+    const dados = await resposta.json();
+
+    if (versaoAtual === null) {
+      versaoAtual = dados.versao;
+    } else if (dados.versao !== versaoAtual) {
+      iniciarAtualizacao();
+    }
+  } catch (erro) {
+    // Tenta novamente na próxima verificação.
+  }
+}
+
+verificarVersaoAtual();
+setInterval(verificarVersaoAtual, 15000);
+    
     function iniciarAtualizacao() {
       if (atualizando) return;
       atualizando = true;
