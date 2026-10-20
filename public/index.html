@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script>
+  if (navigator.userAgent.includes('Electron')) {
+    document.documentElement.classList.add('electron-app');
+  }
+</script>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#1e1f22">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
@@ -9,6 +14,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Morro do Bingão</title>
   <style>
+    .electron-app .downloads {
+  display: none !important;
+}
     :root {
       --roxo: #7c3aed;
       --roxo-escuro: #1a0b2e;
