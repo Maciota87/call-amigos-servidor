@@ -547,7 +547,6 @@ function fecharPainelConvite() {
 function enviarConviteSala(chaveAmigo) {
   socket.emit('convidar-amigo', chaveAmigo, (res) => {
     if (res?.ok) {
-      alert('Convite enviado!');
       fecharPainelConvite();
       return;
     }
