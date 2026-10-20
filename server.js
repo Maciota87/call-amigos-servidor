@@ -601,6 +601,14 @@ async function iniciar() {
       criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS perfis (
+      chave TEXT PRIMARY KEY REFERENCES contas(chave) ON DELETE CASCADE,
+      dados JSONB NOT NULL DEFAULT '{}'::jsonb
+    )
+  `);
+  
   await pool.query(`
     CREATE TABLE IF NOT EXISTS amizades (
       solicitante TEXT NOT NULL,
