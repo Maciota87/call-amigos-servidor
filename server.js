@@ -424,7 +424,7 @@ io.on('connection', (socket) => {
     }
   });
   // ===== Entrar na sala =====
-  socket.on('join-room', (room, responder) => {
+  socket.on('join-room', async (room, responder) => {
     const reply = resposta(responder);
     if (!socket.data.chave) return reply({ ok: false, motivo: 'login' });
     if (socket.data.room) return reply({ ok: true });
