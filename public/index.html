@@ -1469,6 +1469,21 @@ socket.on('room-sound', (tipo) => {
     tocar();
   }
 }
+    function somEntrar() {
+  tocarNotas([
+    { freq: 523, inicio: 0, duracao: 0.12 },
+    { freq: 659, inicio: 0.14, duracao: 0.12 },
+    { freq: 784, inicio: 0.28, duracao: 0.18 },
+  ]);
+}
+
+function somSair() {
+  tocarNotas([
+    { freq: 784, inicio: 0, duracao: 0.12 },
+    { freq: 659, inicio: 0.14, duracao: 0.12 },
+    { freq: 523, inicio: 0.28, duracao: 0.18 },
+  ]);
+}
     // Desbloqueia o som após a primeira interação com a página.
 document.addEventListener('click', () => {
   const AudioContextDisponivel = window.AudioContext || window.webkitAudioContext;
