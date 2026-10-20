@@ -177,41 +177,6 @@
     #musicNome { flex-basis: 100%; text-align: center; font-size: .95rem; opacity: .9; word-break: break-all; }
     #musicPanel label { font-size: .9rem; opacity: .85; }
     #musicPanel input[type="range"] { width: 140px; padding: 0; border: none; background: transparent; accent-color: var(--lilas-claro); }
-    .music-busca {
-  display: flex;
-  flex-basis: 100%;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
-
-.music-busca input {
-  flex: 1;
-  min-width: min(220px, 100%);
-}
-
-#musicResultados {
-  display: grid;
-  flex-basis: 100%;
-  gap: 6px;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-.music-resultado {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: rgba(10, 4, 20, .45);
-  border-radius: 10px;
-}
-
-.music-resultado small {
-  display: block;
-  opacity: .75;
-}
 
     .badge {
       display: inline-block; min-width: 22px; padding: 0 6px; margin-left: 6px; border-radius: 999px;
@@ -369,26 +334,6 @@
 
     <div id="musicPanel" hidden>
       <span id="musicNome">Nenhuma música escolhida</span>
-      <div class="music-busca">
-  <input
-    id="musicBusca"
-    placeholder="Pesquisar música ou artista"
-    onkeydown="if(event.key==='Enter') buscarMusica()"
-  >
-  <button class="btn" onclick="buscarMusica()">🔎 Buscar</button>
-</div>
-
-<div id="musicResultados"></div>
-
-<div class="music-busca">
-  <input
-    id="musicLink"
-    type="url"
-    placeholder="Ou cole um link direto para áudio"
-    onkeydown="if(event.key==='Enter') tocarLinkMusica()"
-  >
-  <button class="btn" onclick="tocarLinkMusica()">▶️ Tocar link</button>
-</div>
       <input type="file" id="musicFile" accept="audio/*" hidden>
       <button class="btn" onclick="escolherMusica()">📂 Escolher música</button>
       <button id="musicPlayBtn" class="btn primary" onclick="togglePlayMusica()">▶️ Tocar</button>
@@ -468,8 +413,6 @@
     let mixDest = null;
     let sendAudioTrack = null;
     let musicGain = null;
-    let musicTitulo = '';
-    let musicArtista = '';
     let musicEl = null;
     let musicSrc = null;
     let loopFalaAtivo = false;
@@ -1418,221 +1361,56 @@
       $('musicToggleBtn').classList.toggle('ativo', !painel.hidden);
     }
 
-   function escolherMusica() {
-  $('musicFile').click();
-}
-
-function liberarFonteMusica() {
-  if (musicEl) {
-    musicEl.pause();
-    if (musicEl.src.startsWith('blob:')) URL.revokeObjectURL(musicEl.src);
-    musicEl.src = '';
-    musicEl = null;
-  }
-
-  if (musicSrc) {
-    try { musicSrc.disconnect(); } catch (err) {}
-    musicSrc = null;
-  }
-}
-
-function configurarMusica(src, titulo, artista = '') {
-  if (!audioCtx) {
-    alert('Entre na sala antes de tocar uma música.');
-    return null;
-  }
-
-  liberarFonteMusica();
-
-  musicTitulo = String(titulo || 'Música por link').slice(0, 160);
-  musicArtista = String(artista || '').slice(0, 100);
-
-  musicEl = new Audio();
-  musicEl.crossOrigin = src.startsWith('blob:') ? '' : 'anonymous';
-  musicEl.src = src;
-
-  musicEl.onplay = () => {
-    $('musicPlayBtn').textContent = '⏸️ Pausar';
-    socket.emit('music-play', {
-      title: musicTitulo,
-      artist: musicArtista,
-    });
-  };
-
-  musicEl.onpause = () => {
-    $('musicPlayBtn').textContent = '▶️ Tocar';
-  };
-
-  musicEl.onended = () => {
-    $('musicPlayBtn').textContent = '▶️ Tocar';
-    socket.emit('music-stop');
-  };
-
-  musicSrc = audioCtx.createMediaElementSource(musicEl);
-  musicSrc.connect(musicGain);
-
-  $('musicNome').textContent =
-    `🎵 ${musicTitulo}${musicArtista ? ' — ' + musicArtista : ''}`;
-
-  return musicEl;
-}
-
-$('musicFile').addEventListener('change', (e) => {
-  const arquivo = e.target.files[0];
-  if (!arquivo) return;
-
-  const audio = configurarMusica(URL.createObjectURL(arquivo), arquivo.name);
-  e.target.value = '';
-  if (audio) togglePlayMusica();
-});
-
-async function buscarMusica() {
-  const consulta = $('musicBusca').value.trim();
-  if (!consulta) return;
-
-  const resultados = $('musicResultados');
-  resultados.replaceChildren();
-  $('musicNome').textContent = 'Buscando músicas…';
-
-  try {
-    const url =
-      `https://itunes.apple.com/search?term=${encodeURIComponent(consulta)}&entity=song&limit=8`;
-
-    const resposta = await fetch(url);
-    if (!resposta.ok) throw new Error('Busca indisponível');
-
-    const dados = await resposta.json();
-
-    if (!dados.results?.length) {
-      $('musicNome').textContent = 'Nenhuma música encontrada.';
-      return;
+    function escolherMusica() {
+      $('musicFile').click();
     }
 
-    $('musicNome').textContent =
-      'Escolha uma prévia para tocar para a sala (até 30 segundos):';
+    $('musicFile').addEventListener('change', (e) => {
+      const arquivo = e.target.files[0];
+      if (!arquivo) return;
+      if (!audioCtx) {
+        e.target.value = '';
+        return alert('Entre na sala antes de tocar uma música.');
+      }
 
-    dados.results.forEach((faixa) => {
-      if (!faixa.previewUrl) return;
+      if (musicEl) {
+        musicEl.pause();
+        URL.revokeObjectURL(musicEl.src);
+      }
+      if (musicSrc) {
+        try { musicSrc.disconnect(); } catch (err) {}
+      }
 
-      const linha = document.createElement('div');
-      linha.className = 'music-resultado';
+      musicEl = new Audio(URL.createObjectURL(arquivo));
+      musicEl.onplay = () => { $('musicPlayBtn').textContent = '⏸️ Pausar'; };
+      musicEl.onpause = () => { $('musicPlayBtn').textContent = '▶️ Tocar'; };
+      musicEl.onended = () => { $('musicPlayBtn').textContent = '▶️ Tocar'; };
 
-      const texto = document.createElement('div');
-      const titulo = document.createElement('strong');
-      titulo.textContent = faixa.trackName;
+      musicSrc = audioCtx.createMediaElementSource(musicEl);
+      musicSrc.connect(musicGain);
 
-      const artista = document.createElement('small');
-      artista.textContent = faixa.artistName;
-
-      texto.append(titulo, artista);
-
-      const botao = document.createElement('button');
-      botao.className = 'btn primary';
-      botao.textContent = 'Tocar';
-      botao.onclick = () =>
-        tocarMusicaRemota(faixa.previewUrl, faixa.trackName, faixa.artistName);
-
-      linha.append(texto, botao);
-      resultados.appendChild(linha);
+      $('musicNome').textContent = '🎵 ' + arquivo.name;
+      e.target.value = '';
+      togglePlayMusica();
     });
-  } catch (e) {
-    $('musicNome').textContent =
-      'Não consegui buscar agora. Cole um link direto para um arquivo de áudio.';
-  }
-}
 
-async function tocarMusicaRemota(url, titulo, artista = '') {
-  try {
-    const audio = configurarMusica(url, titulo, artista);
-    if (!audio) return;
+    function togglePlayMusica() {
+      if (!musicEl) return escolherMusica();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      if (musicEl.paused) musicEl.play().catch(() => {});
+      else musicEl.pause();
+    }
 
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
-    await audio.play();
-  } catch (e) {
-    $('musicNome').textContent =
-      'Não foi possível tocar. Use um link direto para áudio acessível.';
-  }
-}
-
-function tocarLinkMusica() {
-  const valor = $('musicLink').value.trim();
-  if (!valor) return;
-
-  let url;
-  try {
-    url = new URL(valor);
-  } catch {
-    alert('Cole um link de áudio válido começando com https://');
-    return;
-  }
-
-  if (url.protocol !== 'https:') {
-    alert('Use um link começando com https://');
-    return;
-  }
-
-  const nome = url.pathname.split('/').pop() || 'Áudio por link';
-  const titulo = nome.replace(/\.[a-z0-9]{2,5}$/i, '');
-
-  tocarMusicaRemota(url.href, titulo || 'Áudio por link');
-}
-
-function togglePlayMusica() {
-  if (!musicEl) return escolherMusica();
-
-  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-
-  if (musicEl.paused) {
-    musicEl.play().catch(() => {});
-  } else {
-    musicEl.pause();
-    socket.emit('music-stop');
-  }
-}
-
-function pararMusica() {
-  if (musicEl) {
-    musicEl.pause();
-    musicEl.currentTime = 0;
-  }
-
-  socket.emit('music-stop');
-}
-
-function atualizarMusicaDaSala(musica) {
-  if (!musica) {
-    if (musicEl && !musicEl.paused) {
+    function pararMusica() {
+      if (!musicEl) return;
       musicEl.pause();
       musicEl.currentTime = 0;
     }
 
-    $('musicNome').textContent = 'Nenhuma música tocando para a sala';
-    $('musicPlayBtn').textContent = '▶️ Tocar';
-    return;
-  }
+    function ajustarVolumeMusica(valor) {
+      if (musicGain) musicGain.gain.value = valor / 100;
+    }
 
-  $('musicNome').textContent =
-    `🎵 Tocando para a sala: ${musica.title}${musica.artist ? ' — ' + musica.artist : ''}`;
-}
-
-socket.on('music-state', atualizarMusicaDaSala);
-
-socket.on('music-play', (musica) => {
-  if (musica.ownerId === socket.id) return;
-
-  if (musicEl && !musicEl.paused) {
-    musicEl.pause();
-    musicEl.currentTime = 0;
-  }
-
-  atualizarMusicaDaSala(musica);
-});
-
-socket.on('music-stop', () => atualizarMusicaDaSala(null));
-
-function ajustarVolumeMusica(valor) {
-  if (musicGain) musicGain.gain.value = valor / 100;
-}
     // ===== Microfone e fone =====
 
     function toggleMic() {
