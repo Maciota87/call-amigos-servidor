@@ -471,12 +471,24 @@ io.on('connection', (socket) => {
     socket.join(chave);
     socket.data.room = chave;
 
+    io.to(chave).emit('room-sound', 'entrar');
+
     socket.emit('existing-users', outros);
     socket.to(chave).emit('user-joined', { id: socket.id, name: socket.data.nome });
     reply({ ok: true });
   });
 
   // ===== Sinalização (conexão entre as pessoas) =====
+
+socket.on('room-sound-request', (tipo) => {
+  const room = socket.data.room;
+  const permitidos = ['compartilhar', 'parar-compartilhamento'];
+
+  if (!room || !permitidos.includes(tipo)) return;
+
+  io.to(room).emit('room-sound', tipo);
+});
+  
   socket.on('signal', (payload) => {
     const { to, data } = payload || {};
     const chave = socket.data.room;
@@ -560,7 +572,8 @@ io.on('connection', (socket) => {
     }
   });
    socket.on('disconnect', () => {
-    if (socket.data.room) {
+    if (socket.data.room)
+    socket.to(room).emit('room-sound', 'sair');{
       socket.to(socket.data.room).emit('user-left', socket.id);
     }
     if (socket.data.chave) avisarStatus(socket.data.chave, socket.id);
