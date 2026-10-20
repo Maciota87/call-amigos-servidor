@@ -1141,23 +1141,25 @@ socket.on('room-sound', (tipo) => {
 
       entrando = true;
 
-            const AudioContextDisponivel = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextDisponivel) {
+                  const AudioContextDisponivel = window.AudioContext || window.webkitAudioContext;
+      if (!audioCtx && AudioContextDisponivel) {
+        audioCtx = new AudioContextDisponivel();
+      }
+
+      if (!audioCtx) {
         entrando = false;
         alert('Este navegador não oferece suporte ao áudio da chamada.');
         return;
       }
 
       try {
-        if (!audioCtx) audioCtx = new AudioContextDisponivel();
-        if (audioCtx.state !== 'running') await audioCtx.resume();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
       } catch (erro) {
         console.error('Não consegui ativar o áudio:', erro);
         entrando = false;
-        alert('Não consegui iniciar o áudio. Clique em Entrar novamente.');
+        alert('Não consegui iniciar o áudio. Tente entrar novamente.');
         return;
       }
-
       try {
         const mic = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -1512,11 +1514,15 @@ function somSair() {
     // Desbloqueia o som após a primeira interação com a página.
 document.addEventListener('click', () => {
   const AudioContextDisponivel = window.AudioContext || window.webkitAudioContext;
-  if (!notificacaoAudioCtx && AudioContextDisponivel) {
-    notificacaoAudioCtx = new AudioContextDisponivel();
+
+  if (!audioCtx && AudioContextDisponivel) {
+    audioCtx = new AudioContextDisponivel();
   }
-  if (notificacaoAudioCtx?.state === 'suspended') {
-    notificacaoAudioCtx.resume().catch(() => {});
+
+  notificacaoAudioCtx = audioCtx;
+
+  if (audioCtx?.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
   }
 }, { once: true });
 
