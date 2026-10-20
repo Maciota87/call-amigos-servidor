@@ -1432,24 +1432,36 @@ setInterval(verificarVersaoAtual, 15000);
     // ===== Sons de entrada, saída e compartilhamento (gerados pelo app, sem arquivos) =====
 
     function tocarNotas(notas) {
-      if (!audioCtx || deafened) return;
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const agora = audioCtx.currentTime;
-      notas.forEach(({ freq, inicio, duracao }) => {
-        const osc = audioCtx.createOscillator();
-        const ganho = audioCtx.createGain();
-        const t0 = agora + inicio;
-        osc.type = 'sine';
-        osc.frequency.value = freq;
-        ganho.gain.setValueAtTime(0.0001, t0);
-        ganho.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
-        ganho.gain.exponentialRampToValueAtTime(0.0001, t0 + duracao);
-        osc.connect(ganho);
-        ganho.connect(audioCtx.destination); // só você ouve
-        osc.start(t0);
-        osc.stop(t0 + duracao + 0.05);
-      });
-    }
+  const ctx = notificacaoAudioCtx || audioCtx;
+  if (!ctx || deafened) return;
+
+  const tocar = () => {
+    const agora = ctx.currentTime;
+
+    notas.forEach(({ freq, inicio, duracao }) => {
+      const osc = ctx.createOscillator();
+      const ganho = ctx.createGain();
+      const t = agora + inicio;
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+      ganho.gain.setValueAtTime(0.0001, t);
+      ganho.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+      ganho.gain.exponentialRampToValueAtTime(0.0001, t + duracao);
+
+      osc.connect(ganho);
+      ganho.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + duracao + 0.05);
+    });
+  };
+
+  if (ctx.state === 'suspended') {
+    ctx.resume().then(tocar).catch(() => {});
+  } else {
+    tocar();
+  }
+}
     // Desbloqueia o som após a primeira interação com a página.
 document.addEventListener('click', () => {
   const AudioContextDisponivel = window.AudioContext || window.webkitAudioContext;
@@ -1461,6 +1473,36 @@ document.addEventListener('click', () => {
   }
 }, { once: true });
 
+function somCompartilhar() {
+  const ctx = notificacaoAudioCtx || audioCtx;
+  if (!ctx || deafened) return;
+
+  const tocar = () => {
+    const agora = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const ganho = ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(440, agora);
+    osc.frequency.exponentialRampToValueAtTime(1320, agora + 0.25);
+
+    ganho.gain.setValueAtTime(0.0001, agora);
+    ganho.gain.exponentialRampToValueAtTime(0.22, agora + 0.03);
+    ganho.gain.exponentialRampToValueAtTime(0.0001, agora + 0.35);
+
+    osc.connect(ganho);
+    ganho.connect(ctx.destination);
+    osc.start(agora);
+    osc.stop(agora + 0.4);
+  };
+
+  if (ctx.state === 'suspended') {
+    ctx.resume().then(tocar).catch(() => {});
+  } else {
+    tocar();
+  }
+}
+    
 function tocarSomNotificacao(notas) {
   const ctx = audioCtx || notificacaoAudioCtx;
   if (!ctx) return;
