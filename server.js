@@ -339,14 +339,118 @@ io.on('connection', (socket) => {
       reply({ ok: false, motivo: 'erro' });
     }
   });
+    // ===== Servidores =====
+
+  socket.on('servidor-criar', async (nome, responder) => {
+    const reply = resposta(responder);
+    if (!socket.data.chave) return reply({ ok: false, motivo: 'login' });
+
+    try {
+      nome = String(nome || '').trim().slice(0, 40);
+      if (!nome) return reply({ ok: false, motivo: 'nome' });
+
+      const id = 'SRV-' + crypto.randomBytes(6).toString('hex').toUpperCase();
+      const convite = crypto.randomBytes(4).toString('hex').toUpperCase();
+
+      const resultado = await pool.query(
+        `INSERT INTO servidores (id, nome, convite, dono)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, nome, convite`,
+        [id, nome, convite, socket.data.chave]
+      );
+
+      await pool.query(
+        `INSERT INTO servidor_membros (servidor_id, usuario)
+         VALUES ($1, $2)`,
+        [id, socket.data.chave]
+      );
+
+      reply({ ok: true, servidor: resultado.rows[0] });
+    } catch (e) {
+      console.error('Erro ao criar servidor:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
+  });
+
+  socket.on('servidores-listar', async (responder) => {
+    const reply = resposta(responder);
+    if (!socket.data.chave) return reply({ ok: false, motivo: 'login' });
+
+    try {
+      const resultado = await pool.query(
+        `SELECT s.id, s.nome, s.convite, s.dono
+         FROM servidores s
+         JOIN servidor_membros m ON m.servidor_id = s.id
+         WHERE m.usuario = $1
+         ORDER BY s.criado_em`,
+        [socket.data.chave]
+      );
+
+      reply({ ok: true, servidores: resultado.rows });
+    } catch (e) {
+      console.error('Erro ao listar servidores:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
+  });
+
+  socket.on('servidor-entrar-convite', async (convite, responder) => {
+    const reply = resposta(responder);
+    if (!socket.data.chave) return reply({ ok: false, motivo: 'login' });
+
+    try {
+      convite = String(convite || '').trim().toUpperCase();
+
+      const resultado = await pool.query(
+        `SELECT id, nome, convite, dono
+         FROM servidores
+         WHERE convite = $1`,
+        [convite]
+      );
+
+      const servidor = resultado.rows[0];
+      if (!servidor) return reply({ ok: false, motivo: 'convite' });
+
+      await pool.query(
+        `INSERT INTO servidor_membros (servidor_id, usuario)
+         VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [servidor.id, socket.data.chave]
+      );
+
+      reply({ ok: true, servidor });
+    } catch (e) {
+      console.error('Erro ao entrar no servidor:', e.message);
+      reply({ ok: false, motivo: 'erro' });
+    }
+  });
   // ===== Entrar na sala =====
   socket.on('join-room', (room, responder) => {
     const reply = resposta(responder);
     if (!socket.data.chave) return reply({ ok: false, motivo: 'login' });
     if (socket.data.room) return reply({ ok: true });
 
-    const nomeSala = String(room || '').trim().toUpperCase().slice(0, 40);
+        const nomeSala = String(room || '').trim().toUpperCase().slice(0, 40);
     if (!nomeSala) return reply({ ok: false, motivo: 'dados' });
+
+    // Salas com prefixo SRV- pertencem a servidores cadastrados.
+    // Só membros daquele servidor podem entrar.
+    if (nomeSala.startsWith('SRV-')) {
+      try {
+        const membro = await pool.query(
+          `SELECT 1
+           FROM servidor_membros
+           WHERE servidor_id = $1 AND usuario = $2`,
+          [nomeSala, socket.data.chave]
+        );
+
+        if (!membro.rowCount) {
+          return reply({ ok: false, motivo: 'sem_acesso' });
+        }
+      } catch (e) {
+        console.error('Erro ao verificar membro do servidor:', e.message);
+        return reply({ ok: false, motivo: 'erro' });
+      }
+    }
 
     const chave = 'sala:' + nomeSala;
     const sala = io.sockets.adapter.rooms.get(chave);
@@ -457,6 +561,24 @@ async function iniciar() {
     CREATE TABLE IF NOT EXISTS perfis (
       chave TEXT PRIMARY KEY,
       dados JSONB NOT NULL DEFAULT '{}'::jsonb
+    )
+  `);
+    await pool.query(`
+    CREATE TABLE IF NOT EXISTS servidores (
+      id TEXT PRIMARY KEY,
+      nome TEXT NOT NULL,
+      convite TEXT UNIQUE NOT NULL,
+      dono TEXT NOT NULL REFERENCES contas(chave) ON DELETE CASCADE,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS servidor_membros (
+      servidor_id TEXT NOT NULL REFERENCES servidores(id) ON DELETE CASCADE,
+      usuario TEXT NOT NULL REFERENCES contas(chave) ON DELETE CASCADE,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (servidor_id, usuario)
     )
   `);
   const PORT = process.env.PORT || 3000;
