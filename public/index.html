@@ -447,6 +447,10 @@
     font-size: .9rem;
   }
 }
+    body:has(#call:not([hidden])) header,
+body:has(#call:not([hidden])) .downloads {
+  display: none !important;
+}
   </style>
 </head>
 <body>
@@ -1484,55 +1488,59 @@ function tocarSomNotificacao(notas) {
 }
 
 function somConvite() {
-  tocarSomNotificacao([
-    { freq: 740, inicio: 0, duracao: 0.16 },
-    { freq: 988, inicio: 0.18, duracao: 0.3 },
-  ]);
+  const ctx = audioCtx || notificacaoAudioCtx;
+  if (!ctx || deafened) return;
+
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+  const agora = ctx.currentTime;
+
+  // Três notas curtas, com timbre e ritmo diferentes do som de entrada
+  [
+    { freq: 784, inicio: 0, duracao: 0.11 },
+    { freq: 587, inicio: 0.16, duracao: 0.11 },
+    { freq: 784, inicio: 0.32, duracao: 0.2 },
+  ].forEach(({ freq, inicio, duracao }) => {
+    const osc = ctx.createOscillator();
+    const ganho = ctx.createGain();
+    const t = agora + inicio;
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, t);
+    ganho.gain.setValueAtTime(0.0001, t);
+    ganho.gain.exponentialRampToValueAtTime(0.16, t + 0.02);
+    ganho.gain.exponentialRampToValueAtTime(0.0001, t + duracao);
+
+    osc.connect(ganho);
+    ganho.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + duracao + 0.03);
+  });
 }
-
-function somPararCompartilhamento() {
-  tocarSomNotificacao([
-    { freq: 660, inicio: 0, duracao: 0.17 },
-    { freq: 440, inicio: 0.18, duracao: 0.3 },
-  ]);
-}
-
-    // Entrou: dois tons subindo
-    function somEntrar() {
-      tocarNotas([
-        { freq: 660, inicio: 0, duracao: 0.15 },
-        { freq: 880, inicio: 0.14, duracao: 0.25 },
-      ]);
-    }
-
-    // Saiu: dois tons descendo
-    function somSair() {
-      tocarNotas([
-        { freq: 880, inicio: 0, duracao: 0.15 },
-        { freq: 440, inicio: 0.14, duracao: 0.3 },
-      ]);
-    }
 
     // Começou a compartilhar: um som curto que sobe de forma rápida e contínua,
     // com timbre diferente (triângulo) dos sons de entrar e sair
-    function somCompartilhar() {
-      if (!audioCtx || deafened) return;
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const agora = audioCtx.currentTime;
-      const osc = audioCtx.createOscillator();
-      const ganho = audioCtx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(440, agora);
-      osc.frequency.exponentialRampToValueAtTime(1320, agora + 0.25);
-      ganho.gain.setValueAtTime(0.0001, agora);
-      ganho.gain.exponentialRampToValueAtTime(0.22, agora + 0.03);
-      ganho.gain.exponentialRampToValueAtTime(0.0001, agora + 0.35);
-      osc.connect(ganho);
-      ganho.connect(audioCtx.destination); // só você ouve
-      osc.start(agora);
-      osc.stop(agora + 0.4);
-    }
+   function somPararCompartilhamento() {
+  if (!audioCtx || deafened) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
 
+  const agora = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const ganho = audioCtx.createGain();
+
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(1320, agora);
+  osc.frequency.exponentialRampToValueAtTime(440, agora + 0.25);
+
+  ganho.gain.setValueAtTime(0.0001, agora);
+  ganho.gain.exponentialRampToValueAtTime(0.22, agora + 0.03);
+  ganho.gain.exponentialRampToValueAtTime(0.0001, agora + 0.35);
+
+  osc.connect(ganho);
+  ganho.connect(audioCtx.destination);
+  osc.start(agora);
+  osc.stop(agora + 0.4);
+}
     // ===== Brilho de quem está falando =====
 
     function criarAnalisador(id, track) {
