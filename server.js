@@ -571,7 +571,7 @@ socket.on('room-sound-request', (tipo) => {
       reply({ ok: false, motivo: 'erro' });
     }
   });
-   socket.on('disconnect', () => {
+  socket.on('disconnect', () => {
   const room = socket.data.room;
 
   if (room) {
@@ -582,7 +582,9 @@ socket.on('room-sound-request', (tipo) => {
   if (socket.data.chave) {
     avisarStatus(socket.data.chave, socket.id);
   }
-});
+}); // fecha socket.on('disconnect')
+
+}); // fecha io.on('connection')
 
 // Cria a tabela de contas sozinho, se ela ainda não existir
 async function iniciar() {
