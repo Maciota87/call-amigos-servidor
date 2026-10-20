@@ -14,9 +14,6 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Morro do Bingão</title>
   <style>
-    .electron-app .downloads {
-  display: none !important;
-}
     :root {
       --roxo: #7c3aed;
       --roxo-escuro: #1a0b2e;
@@ -295,6 +292,7 @@
 .download-btn:hover {
   background: #6d28d9;
 }
+        .electron-app .downloads { display: none; }
   </style>
 </head>
 <body>
@@ -331,9 +329,7 @@
     Baixar para PC Windows (.exe)
   </a>
 </div>
-
-<section id="setup" class="card" hidden>
-
+  
   <!-- Escolha da sala (depois do login) -->
   <section id="setup" class="card" hidden>
     <p class="logado">Logado como <strong id="usuarioLogado"></strong></p>
