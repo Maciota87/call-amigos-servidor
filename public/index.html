@@ -265,6 +265,28 @@
 
       #chatPanel { top: auto; left: 0; width: 100%; height: 65vh; border-left: none; border-top: 1px solid rgba(167,139,250,.3); border-radius: 18px 18px 0 0; animation: subir .25s ease; }
     }
+    .downloads {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 12px;
+}
+
+.download-btn {
+  display: inline-block;
+  padding: 12px 18px;
+  border-radius: 8px;
+  background: #7c3aed;
+  color: white;
+  text-decoration: none;
+  font-weight: bold;
+  text-align: center;
+}
+
+.download-btn:hover {
+  background: #6d28d9;
+}
   </style>
 </head>
 <body>
@@ -275,6 +297,17 @@
     </div>
     <p class="sub">Chamada com amigos e compartilhamento de tela</p>
   </header>
+  <div class="downloads">
+  <a class="download-btn"
+     href="https://github.com/Maciota87/call-amigos-servidor/releases/download/v1.0.0/Morro.apk">
+    Baixar para Android (.apk)
+  </a>
+
+  <a class="download-btn"
+     href="https://github.com/Maciota87/call-amigos-servidor/releases/download/v1.0.0/Morro.do.Bingao.Setup.1.0.0.exe">
+    Baixar para PC Windows (.exe)
+  </a>
+</div>
 
   <!-- Tela de login e criação de conta -->
   <section id="login" class="card">
