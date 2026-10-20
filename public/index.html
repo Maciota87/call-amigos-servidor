@@ -1152,17 +1152,16 @@ socket.on('room-sound', (tipo) => {
         alert('Não consegui acessar o microfone. Libere a permissão do microfone no navegador e entre de novo. Por enquanto você vai ouvir, mas não vai conseguir falar.');
       }
 
-      prepararAudio();
+            prepararAudio();
 
-if (audioCtx.state === 'suspended') {
-  try {
-    await audioCtx.resume();
-  } catch (erro) {
-    console.error('Não consegui ativar o áudio:', erro);
-  }
-}
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch((erro) => {
+          console.error('Não consegui ativar o áudio:', erro);
+        });
+      }
 
-if (micTrack) criarAnalisador('me', micTrack);
+      if (micTrack) criarAnalisador('me', micTrack);
+      iniciarLoopFala();
 
       minhaSala = sala;
       estouNaCall = true;
