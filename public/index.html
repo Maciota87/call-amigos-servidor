@@ -1382,85 +1382,123 @@ socket.on('room-sound', (tipo) => {
       atualizarControlesVoz(id);
     }
 
-    // ===== Voz dos amigos (passa por um controle de volume próprio) =====
+    // ===== Voz dos amigos (tocada por um elemento de áudio, o jeito mais confiável) =====
+
+    // Cria um elemento de áudio que toca a faixa recebida. Não depende do AudioContext.
+    function criarElementoAudio(track) {
+      const el = new Audio();
+      el.srcObject = new MediaStream([track]);
+      el.autoplay = true;
+      aplicarSaidaEm(el);
+      el.play().catch(() => {});
+      // Se a faixa chegar muda no começo, toca de novo quando o som chegar
+      track.onunmute = () => el.play().catch(() => {});
+      return el;
+    }
 
     function ligarVoz(id, track) {
       const peer = peers.get(id);
-      if (!audioCtx || !peer) return;
+      if (!peer) return;
       desligarVoz(id);
 
-      const fonte = audioCtx.createMediaStreamSource(new MediaStream([track]));
-      const ganho = audioCtx.createGain();
-      fonte.connect(ganho);
-      ganho.connect(audioCtx.destination);
-      peer.voz = { fonte, ganho };
-
+      peer.voz = { el: criarElementoAudio(track), fonte: null, ganho: null };
       aplicarVolumeVoz(id);
-      criarAnalisador(id, track);
+      if (audioCtx) criarAnalisador(id, track);
     }
 
     function desligarVoz(id) {
       const peer = peers.get(id);
       if (!peer || !peer.voz) return;
       try {
-        peer.voz.fonte.disconnect();
-        peer.voz.ganho.disconnect();
+        if (peer.voz.fonte) peer.voz.fonte.disconnect();
+        if (peer.voz.ganho) peer.voz.ganho.disconnect();
       } catch (e) {}
+      peer.voz.el.pause();
+      peer.voz.el.srcObject = null;
       peer.voz = null;
     }
 
+    // De 0% a 100%: volume do próprio elemento.
+    // Acima de 100%: passa pelo amplificador do AudioContext.
     function aplicarVolumeVoz(id) {
       const p = peers.get(id);
-      if (!p || !p.voz || !audioCtx) return;
+      if (!p || !p.voz) return;
       const alvo = (p.mutado || deafened) ? 0 : p.volume;
-      p.voz.ganho.gain.setTargetAtTime(alvo, audioCtx.currentTime, 0.05);
+      const v = p.voz;
+
+      if (!v.ganho && alvo <= 1) {
+        v.el.muted = alvo === 0;
+        v.el.volume = alvo;
+        return;
+      }
+
+      if (!v.ganho) {
+        if (!audioCtx) {
+          v.el.muted = false;
+          v.el.volume = 1;
+          return;
+        }
+        try {
+          v.fonte = audioCtx.createMediaElementSource(v.el);
+          v.ganho = audioCtx.createGain();
+          v.fonte.connect(v.ganho);
+          v.ganho.connect(audioCtx.destination);
+        } catch (e) {
+          v.el.muted = false;
+          v.el.volume = 1;
+          return;
+        }
+      }
+
+      v.el.muted = false;
+      v.el.volume = 1;
+      v.ganho.gain.setTargetAtTime(alvo, audioCtx.currentTime, 0.05);
     }
 
-    // ===== Som da tela compartilhada (separado da voz) =====
+    // ===== Som da tela compartilhada (também em elemento de áudio separado) =====
 
     function ligarAudioDaTela(id, track) {
-      if (!audioCtx) return;
       desligarAudioDaTela(id);
-
-      const fonte = audioCtx.createMediaStreamSource(new MediaStream([track]));
-      const ganho = audioCtx.createGain();
-      fonte.connect(ganho);
-      ganho.connect(audioCtx.destination);
-
-      const alvo = alvoTela(id);
-      ganho.gain.value = alvo;
-      audiosTela.set(id, { fonte, ganho, alvo });
+      const el = criarElementoAudio(track);
+      el.volume = volTelaPorId.has(id) ? volTelaPorId.get(id) : 1;
+      el.muted = deafened;
+      audiosTela.set(id, { el });
     }
 
     function desligarAudioDaTela(id) {
       const a = audiosTela.get(id);
       if (!a) return;
-      try {
-        a.fonte.disconnect();
-        a.ganho.disconnect();
-      } catch (e) {}
+      a.el.pause();
+      a.el.srcObject = null;
       audiosTela.delete(id);
     }
 
-    // Volume do som da tela: só o controle de cada pessoa e o botão de fone (mudo)
-    function alvoTela(id) {
-      const vol = volTelaPorId.has(id) ? volTelaPorId.get(id) : 1;
-      return (deafened ? 0 : 1) * vol;
-    }
-
-    function atualizarVolumeTela(forcar = false) {
-      if (!audioCtx) return;
+    // Volume do som da tela (de 0% a 100%), respeitando o botão de fone
+    function atualizarVolumeTela() {
       audiosTela.forEach((a, id) => {
-        const alvo = alvoTela(id);
-        if (!forcar && a.alvo === alvo) return;
-        a.alvo = alvo;
-        a.ganho.gain.setTargetAtTime(alvo, audioCtx.currentTime, 0.2);
+        a.el.volume = volTelaPorId.has(id) ? volTelaPorId.get(id) : 1;
+        a.el.muted = deafened;
       });
     }
 
     function mudarVolumeTela(id, valor) {
       volTelaPorId.set(id, valor);
-      atualizarVolumeTela(true);
+      const a = audiosTela.get(id);
+      if (a) a.el.volume = valor;
+    }
+
+    // ===== Envio do microfone para os amigos =====
+
+    // Sem música, o microfone vai direto (o WebRTC cancela o eco melhor).
+    // Depois que uma música é escolhida, vai a mistura: microfone + música.
+    function faixaDeEnvio() {
+      if (musicEl && sendAudioTrack) return sendAudioTrack;
+      return micTrack || sendAudioTrack || null;
+    }
+
+    function atualizarEnvioAudio() {
+      const faixa = faixaDeEnvio();
+      peers.forEach((p) => p.audioSender.replaceTrack(faixa).catch(() => {}));
     }
 
     // ===== Sons de entrada, saída e compartilhamento (gerados pelo app, sem arquivos) =====
@@ -2002,11 +2040,12 @@ function salvarSalaRecente(sala) {
       togglePlayMusica();
     });
 
-    function togglePlayMusica() {
+       function togglePlayMusica() {
       if (!musicEl) return escolherMusica();
       if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
       if (musicEl.paused) musicEl.play().catch(() => {});
       else musicEl.pause();
+      atualizarEnvioAudio();
     }
 
     function pararMusica() {
@@ -2150,7 +2189,7 @@ function salvarSalaRecente(sala) {
         micSrcNode = audioCtx.createMediaStreamSource(new MediaStream([micTrack]));
         micSrcNode.connect(mixDest);
         criarAnalisador('me', micTrack);
-
+        atualizarEnvioAudio();
         atualizarBotoesAudio();
         listarDispositivos();
       } catch (e) {
@@ -2242,7 +2281,7 @@ function salvarSalaRecente(sala) {
       };
       peers.set(id, peer);
 
-      if (sendAudioTrack) audioSender.replaceTrack(sendAudioTrack).catch(() => {});
+      if (sendAudioTrack)    audioSender.replaceTrack(faixaDeEnvio()).catch(() => {});
       if (screenTrack) {
         videoSender.replaceTrack(screenTrack).catch(() => {});
         socket.emit('signal', { to: id, data: { tela: true } });
