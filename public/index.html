@@ -1,82 +1,1902 @@
-    #controls { display: none; gap: 8px; }
-  </style>
-      <button id="micBtn" class="gray" onclick="toggleMic(this)">Mutar</button>
-      <button class="red" onclick="location.reload()">Sair</button>
-
-  <div id="grid"></div>
-    let meVideo = null;
-
-
-      if (micTrack) audioSender.replaceTrack(micTrack);
-      if (screenTrack) videoSender.replaceTrack(screenTrack);
-    socket.on('signal', onSignal);
-
-    function toggleMic(btn) {
-      if (!micTrack) return;
-      micTrack.enabled = !micTrack.enabled;
-      btn.textContent = micTrack.enabled ? 'Mutar' : 'Desmutar';
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Morro do Bingão</title>
+  <style>
+    :root {
+      --roxo: #7c3aed;
+      --roxo-escuro: #1a0b2e;
+      --lilas: #c4b5fd;
+      --lilas-claro: #a78bfa;
+      --vermelho: #e0313b;
+      --branco: #faf5ff;
+      --cinza: #2e1f4a;
     }
-    #controls { display: none; gap: 8px; }
-    #music-panel { display:none; width:100%; padding:10px 16px; background:#25262a; gap:8px; align-items:center; flex-wrap:wrap; }
-    #music-panel input { min-width:220px; }
-    #music-results { display:grid; gap:6px; width:100%; max-width:700px; }
-    .music-result { display:flex; justify-content:space-between; align-items:center; gap:10px; background:#1e1f22; padding:8px 10px; border-radius:6px; }
-    .music-result small { display:block; color:#b5bac1; }
-    #now-playing { color:#b5bac1; font-size:13px; }
-    @media (max-width:600px) { #grid { grid-template-columns:1fr; } }
-  </style>
-      <button id="micBtn" class="gray" onclick="toggleMic(this)">Mutar</button>
-      <button id="musicBtn" onclick="toggleMusicPanel()">♫ Música</button>
-      <button class="red" onclick="location.reload()">Sair</button>
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
 
-  <section id="music-panel">
-    <input id="music-search" placeholder="Buscar música ou colar link de áudio" onkeydown="if(event.key==='Enter') searchMusic()">
-    <button onclick="searchMusic()">Buscar</button>
-    <button id="stopMusicBtn" class="gray" onclick="stopMusic()" style="display:none">Parar música</button>
-    <span id="now-playing">Busque uma música ou cole um link direto para um arquivo de áudio.</span>
-    <div id="music-results"></div>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--branco);
+      background: linear-gradient(rgba(10,4,20,.7), rgba(10,4,20,.85)), url('mdb.png') center / cover no-repeat fixed;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    header { text-align: center; padding: 24px 16px 10px; animation: descer .6s ease; }
+    .logo { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+    .logo-img { width: 110px; height: auto; border-radius: 16px; filter: drop-shadow(0 6px 12px rgba(0,0,0,.4)); }
+    h1 { margin: 0; font-size: clamp(2rem, 6vw, 3.2rem); letter-spacing: 1px; text-shadow: 0 4px 0 rgba(0,0,0,.35); }
+    .sub { margin: 6px 0 0; opacity: .8; font-size: 1rem; }
+
+    .card {
+      max-width: 420px; margin: 28px auto; padding: 28px;
+      background: var(--cinza); border-radius: 20px; box-shadow: 0 12px 30px rgba(0,0,0,.35);
+      display: flex; flex-direction: column; gap: 14px; animation: subir .5s ease;
+    }
+    .card label { font-size: .9rem; opacity: .85; }
+    .abas { display: flex; gap: 8px; }
+    .abas .btn { flex: 1; }
+    .erro { margin: 0; color: #ff9b9b; font-size: .9rem; }
+    .logado { margin: 0; text-align: center; opacity: .9; }
+    .logado strong { color: var(--lilas); }
+    .check-auto { display: flex; align-items: center; gap: 8px; font-size: .95rem; cursor: pointer; }
+    .check-auto input[type="checkbox"] { width: 18px; height: 18px; padding: 0; border: none; background: transparent; accent-color: var(--lilas-claro); }
+
+    input, select {
+      padding: 12px 14px; border-radius: 12px; border: 2px solid transparent;
+      background: #180d2b; color: var(--branco); font-size: 1rem; outline: none; transition: border-color .2s;
+    }
+    input:focus, select:focus { border-color: var(--lilas-claro); }
+
+    .btn {
+      padding: 12px 18px; border: none; border-radius: 12px; background: #4a3a63; color: var(--branco);
+      font-size: 1rem; font-weight: 600; cursor: pointer; touch-action: manipulation;
+      transition: transform .15s, filter .2s, background .2s;
+    }
+    .btn:hover { filter: brightness(1.12); transform: translateY(-2px); }
+    .btn:active { transform: translateY(1px); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn.primary { background: var(--roxo); }
+    .btn.destaque { background: var(--lilas); color: #1a0b2e; }
+    .btn.danger { background: var(--vermelho); }
+    .btn.big { padding: 15px; font-size: 1.1rem; }
+    .btn.ativo { background: var(--lilas); color: #1a0b2e; }
+
+    .foto-linha { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .preview-avatar {
+      width: 84px; height: 84px; flex-shrink: 0; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #7c3aed, #3b0764) center / cover no-repeat;
+      color: var(--lilas); font-size: 2rem; font-weight: 800; box-shadow: 0 0 0 3px rgba(196,181,253,.25);
+    }
+    .preview-avatar.com-foto span { display: none; }
+
+    .split { position: relative; display: inline-flex; gap: 4px; }
+    .split .btn.principal { border-radius: 12px 0 0 12px; }
+    .split .btn.caret { border-radius: 0 12px 12px 0; padding: 12px 12px; font-size: .85rem; }
+    .menu {
+      position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%);
+      min-width: 260px; max-width: 90vw; max-height: 320px; overflow-y: auto;
+      background: var(--cinza); border-radius: 14px; padding: 8px; box-shadow: 0 12px 30px rgba(0,0,0,.5);
+      display: flex; flex-direction: column; gap: 4px; z-index: 50;
+    }
+    .menu-titulo { font-size: .8rem; opacity: .7; padding: 4px 12px; }
+    .menu-item { background: none; border: none; text-align: left; padding: 10px 12px; border-radius: 10px; color: var(--branco); font-size: .9rem; cursor: pointer; }
+    .menu-item:hover { background: #4a3a63; }
+    .menu-item.sel { background: var(--lilas); color: #1a0b2e; }
+
+    .sala-badge {
+      width: fit-content; max-width: 100%; margin: 0 auto; padding: 8px 18px; border-radius: 999px;
+      background: var(--cinza); box-shadow: 0 6px 16px rgba(0,0,0,.3); text-align: center;
+    }
+    .sala-badge strong { color: var(--lilas); }
+    .sala-badge .sep { opacity: .5; margin: 0 6px; }
+    #timer { font-variant-numeric: tabular-nums; min-width: 4.5em; display: inline-block; }
+    #status { text-align: center; margin: 14px 0 0; font-size: .95rem; opacity: .85; }
+
+    /* ===== Grade de quadros ===== */
+    #call { padding: 0 14px 20px; animation: subir .4s ease; }
+    #grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: center; min-height: 60vh; }
+    .tile {
+      position: relative; flex: 0 0 230px; aspect-ratio: 16 / 9; background: #0a0414; border-radius: 16px;
+      overflow: hidden; cursor: pointer; border: 3px solid transparent; box-shadow: 0 6px 18px rgba(0,0,0,.4);
+      transition: flex .35s ease, height .35s ease, border-color .25s, box-shadow .25s; animation: entrar .4s ease;
+    }
+    .tile:hover { border-color: rgba(167,139,250,.6); }
+    .tile.focus { flex: 1 1 100%; aspect-ratio: auto; height: 62vh; border-color: var(--lilas-claro); }
+    .tile.falando { box-shadow: 0 0 0 3px rgba(167,139,250,.6), 0 6px 18px rgba(0,0,0,.4); }
+    .tile video { width: 100%; height: 100%; object-fit: contain; background: #0a0414; }
+    .tile.sem-video video { visibility: hidden; }
+
+    .tile .avatar { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
+    .tile.sem-video .avatar { display: flex; }
+    .avatar-circ {
+      width: min(38%, 150px); aspect-ratio: 1 / 1; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #7c3aed, #3b0764) center / cover no-repeat;
+      color: var(--lilas); font-size: 2.4rem; font-weight: 800; box-shadow: 0 0 0 3px rgba(196,181,253,.25);
+    }
+    .avatar-circ.com-foto span { display: none; }
+    .tile.focus .avatar-circ { width: min(30vh, 200px); font-size: 3.2rem; }
+    .tile.falando .avatar-circ { animation: brilho 1s ease-in-out infinite; }
+    @keyframes brilho {
+      0%, 100% { box-shadow: 0 0 0 4px rgba(167,139,250,.7), 0 0 14px 6px rgba(167,139,250,.45); }
+      50% { box-shadow: 0 0 0 9px rgba(167,139,250,.25), 0 0 30px 14px rgba(167,139,250,.7); }
+    }
+
+    /* Barras de controle em cima e embaixo do quadro */
+    .topo, .rodape {
+      position: absolute; left: 8px; right: 8px; z-index: 2;
+      display: flex; justify-content: space-between; align-items: center; gap: 6px; pointer-events: none;
+    }
+    .topo { top: 8px; }
+    .rodape { bottom: 8px; }
+    .topo > *, .rodape > * { pointer-events: auto; }
+
+    .tag-tela {
+      background: var(--vermelho); padding: 3px 9px; border-radius: 8px;
+      font-size: .75rem; font-weight: 700; display: none;
+    }
+    .tile.compartilhando .tag-tela { display: block; }
+
+    /* Controles da transmissão (aparecem só quando a pessoa está compartilhando a tela) */
+    .ctrl-tela { display: none; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+    .tile.compartilhando .ctrl-tela { display: flex; }
+    .sel-res, .sl-tela { background: rgba(0,0,0,.65); color: var(--branco); border: none; border-radius: 8px; font-size: .8rem; }
+    .sel-res { padding: 4px 6px; cursor: pointer; }
+    .sl-tela { width: 90px; padding: 0; accent-color: var(--lilas-claro); }
+
+    /* Controles de voz de cada amigo */
+    .nome {
+      background: rgba(0,0,0,.65); padding: 4px 10px; border-radius: 8px; font-size: .9rem;
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ctrl-voz { display: flex; align-items: center; gap: 3px; margin-left: auto; }
+    .mini {
+      background: rgba(0,0,0,.65); color: var(--branco); border: none; border-radius: 8px;
+      padding: 4px 8px; font-size: .85rem; font-weight: 700; cursor: pointer; line-height: 1.2;
+    }
+    .mini:hover { background: rgba(124,58,237,.9); }
+    .pct { background: rgba(0,0,0,.65); border-radius: 8px; padding: 4px 6px; font-size: .8rem; min-width: 46px; text-align: center; }
+
+    #controls {
+      display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px;
+      margin-top: 18px; padding: 14px; background: rgba(0,0,0,.35); border-radius: 18px;
+      position: sticky; bottom: 12px;
+    }
+
+    #musicPanel {
+      display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px;
+      margin: 12px auto 0; padding: 14px; max-width: 720px; background: rgba(46,31,74,.85); border-radius: 18px;
+    }
+    #musicNome { flex-basis: 100%; text-align: center; font-size: .95rem; opacity: .9; word-break: break-all; }
+    #musicPanel label { font-size: .9rem; opacity: .85; }
+    #musicPanel input[type="range"] { width: 140px; padding: 0; border: none; background: transparent; accent-color: var(--lilas-claro); }
+
+    .badge {
+      display: inline-block; min-width: 22px; padding: 0 6px; margin-left: 6px; border-radius: 999px;
+      background: var(--vermelho); color: #fff; font-size: .75rem; font-weight: 700; line-height: 22px; text-align: center;
+    }
+
+    /* ===== Chat ===== */
+    #chatPanel {
+      position: fixed; top: 0; right: 0; bottom: 0; width: min(340px, 100vw);
+      display: flex; flex-direction: column; background: rgba(26,11,46,.97);
+      border-left: 1px solid rgba(167,139,250,.3); box-shadow: -10px 0 30px rgba(0,0,0,.4);
+      z-index: 100; animation: deslizar .25s ease;
+    }
+    .chat-topo {
+      display: flex; justify-content: space-between; align-items: center; padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.1); font-size: 1.05rem;
+    }
+    .chat-topo .btn { padding: 6px 12px; }
+    .chat-msgs { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; background: #3a2a57; overflow-wrap: anywhere; }
+    .msg.eu { align-self: flex-end; background: var(--roxo); }
+    .msg .cab { display: flex; gap: 8px; align-items: baseline; font-size: .75rem; opacity: .85; margin-bottom: 2px; }
+    .msg .txt { font-size: .95rem; white-space: pre-wrap; }
+    .msg.sistema { align-self: center; max-width: 100%; background: none; opacity: .65; font-size: .85rem; font-style: italic; padding: 2px 6px; }
+    .chat-form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid rgba(255,255,255,.1); }
+    .chat-form input { flex: 1; min-width: 0; }
+
+    .dica { text-align: center; opacity: .6; font-size: .9rem; margin: 14px 0 0; }
+
+    /* ===== Tela de atualização ===== */
+    #atualizacao {
+      position: fixed; inset: 0; z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; background: rgba(10,4,20,.92); animation: entrar .3s ease;
+    }
+    .caixa-atualizacao { text-align: center; max-width: 420px; }
+    .logo-atualizacao { width: 90px; border-radius: 16px; margin-bottom: 18px; }
+    .caixa-atualizacao h2 { margin: 0 0 8px; font-size: 1.5rem; color: var(--lilas); }
+    .caixa-atualizacao p { margin: 0; opacity: .85; }
+    .giro {
+      width: 48px; height: 48px; margin: 0 auto 18px;
+      border: 5px solid rgba(196,181,253,.25); border-top-color: var(--lilas-claro);
+      border-radius: 50%; animation: girar .9s linear infinite;
+    }
+    @keyframes girar { to { transform: rotate(360deg); } }
+
+    /* ===== Tela cheia: a chamada ocupa o monitor inteiro ===== */
+    body.tela-cheia { overflow: hidden; }
+    body.tela-cheia header,
+    body.tela-cheia #status,
+    body.tela-cheia .dica { display: none; }
+    body.tela-cheia #call { height: 100vh; padding: 10px 12px; display: flex; flex-direction: column; }
+    body.tela-cheia #grid { flex: 1; min-height: 0; align-content: center; }
+    body.tela-cheia .tile:not(.focus) { flex: 0 0 180px; }
+    body.tela-cheia .tile.focus { flex: 1 1 100%; aspect-ratio: auto; height: calc(100vh - 290px); }
+    body.tela-cheia #controls { margin-top: 10px; }
+
+    @keyframes descer { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+    @keyframes subir { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    @keyframes entrar { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
+    @keyframes deslizar { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
+
+    /* ===== Celular / tela pequena ===== */
+    @media (max-width: 600px) {
+      header { padding: 16px 12px 6px; }
+      .logo { gap: 10px; }
+      .logo-img { width: 64px; }
+      .sub { font-size: .85rem; }
+      .card { margin: 18px auto; padding: 20px; }
+      #call { padding: 0 8px 16px; }
+
+      .tile { flex: 0 0 140px; }
+      .tile.focus { height: 40vh; }
+      .avatar-circ { font-size: 1.6rem; }
+      .nome { font-size: .8rem; }
+      .sl-tela { width: 60px; }
+
+      #controls { position: sticky; bottom: 8px; gap: 8px; padding: 10px; margin-top: 12px; }
+      #controls .btn { padding: 12px 14px; font-size: .95rem; }
+      .split .btn.caret { padding: 12px 10px; }
+
+      .menu { position: fixed; left: 8px; right: 8px; bottom: 8px; top: auto; transform: none; min-width: 0; max-width: none; max-height: 60vh; }
+
+      #chatPanel { top: auto; left: 0; width: 100%; height: 65vh; border-left: none; border-top: 1px solid rgba(167,139,250,.3); border-radius: 18px 18px 0 0; animation: subir .25s ease; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <img src="mdb.png" alt="Logo MDB" class="logo-img">
+      <h1>Morro do Bingão</h1>
+    </div>
+    <p class="sub">Chamada com amigos e compartilhamento de tela</p>
+  </header>
+
+  <!-- Tela de login e criação de conta -->
+  <section id="login" class="card">
+    <div class="abas">
+      <button id="abaEntrar" class="btn ativo" onclick="mudarAba('entrar')">Já tenho conta</button>
+      <button id="abaCriar" class="btn" onclick="mudarAba('criar')">Criar conta</button>
+    </div>
+    <label for="loginUsuario">Nome de usuário</label>
+    <input id="loginUsuario" maxlength="20" autocomplete="username" oninput="maiusculo(this)" onkeydown="teclaLogin(event)">
+    <label for="loginSenha">Senha</label>
+    <input id="loginSenha" type="password" maxlength="100" autocomplete="current-password" onkeydown="teclaLogin(event)">
+    <label class="check-auto" title="Se marcado, você continua logado mesmo depois de fechar o navegador">
+      <input type="checkbox" id="autoLogin" checked onchange="salvarPreferenciaAuto(this.checked)">
+      Entrar automaticamente
+    </label>
+    <p id="regras" class="dica" hidden>Usuário: de 3 a 20 letras ou números, sem espaços. Senha: no mínimo 8 caracteres, com 1 letra maiúscula e 1 número.</p>
+    <p id="loginErro" class="erro" hidden></p>
+    <button id="loginBtn" class="btn primary big" onclick="enviarLogin()">Entrar</button>
   </section>
 
-  <div id="grid"></div>
+  <!-- Escolha da sala (depois do login) -->
+  <section id="setup" class="card" hidden>
+    <p class="logado">Logado como <strong id="usuarioLogado"></strong></p>
+    <label for="room">Nome da sala</label>
+    <input id="room" placeholder="ex: BINGO-DA-GALERA" oninput="maiusculo(this)" onkeydown="teclaEntrar(event)">
+    <label>Foto de perfil (opcional)</label>
+    <div class="foto-linha">
+      <div id="previewAvatar" class="preview-avatar"><span id="previewInicial">?</span></div>
+      <button class="btn" onclick="escolherAvatar()">🖼️ Escolher imagem</button>
+    </div>
+   
+    <button class="btn primary big" onclick="join()">Entrar na sala</button>
+    <button class="btn" onclick="sairDaConta()">Sair da conta</button>
+  </section>
+
+  <!-- Chamada -->
+  <section id="call" hidden>
+    <div class="sala-badge">🏠 Sala: <strong id="salaNome"></strong><span class="sep">·</span>⏱️ <strong id="timer" title="Tempo de chamada">00:00</strong></div>
+    <p id="status">Conectando...</p>
+    <div id="grid"></div>
+
+    <nav id="controls">
+      <div class="split">
+        <button id="micBtn" class="btn principal" onclick="toggleMic()">🎤 Microfone</button>
+        <button class="btn caret" onclick="toggleMenu('mic')" title="Escolher microfone">▲</button>
+        <div id="menu-mic" class="menu" hidden></div>
+      </div>
+
+      <div class="split">
+        <button id="foneBtn" class="btn principal" onclick="toggleFone()">🎧 Fone</button>
+        <button id="spkCaret" class="btn caret" onclick="toggleMenu('spk')" title="Escolher fone ou saída de áudio">▲</button>
+        <div id="menu-spk" class="menu" hidden></div>
+      </div>
+
+      <button id="shareBtn" class="btn destaque" onclick="toggleShare()">🖥️ Compartilhar tela</button>
+      <button id="musicToggleBtn" class="btn" onclick="togglePainelMusica()">🎵 Música</button>
+      <button id="chatBtn" class="btn" onclick="toggleChat()">💬 Chat<span id="chatBadge" class="badge" hidden>0</span></button>
+      <button class="btn danger" onclick="location.reload()">📞 Sair da chamada</button>
+    </nav>
+
+    <div id="musicPanel" hidden>
+      <span id="musicNome">Nenhuma música escolhida</span>
+      <input type="file" id="musicFile" accept="audio/*" hidden>
+      <button class="btn" onclick="escolherMusica()">📂 Escolher música</button>
+      <button id="musicPlayBtn" class="btn primary" onclick="togglePlayMusica()">▶️ Tocar</button>
+      <button class="btn danger" onclick="pararMusica()">⏹️ Parar</button>
+      <label for="musicVolume">Volume da música</label>
+      <input type="range" id="musicVolume" min="0" max="100" value="60" oninput="ajustarVolumeMusica(this.value)">
+    </div>
+
+    <p class="dica" id="dicaCelular">Clique em um vídeo para colocá-lo em destaque. Cada amigo tem botões para mutar e ajustar o volume. Até 10 pessoas por sala. Use fone de ouvido para evitar eco.</p>
+  </section>
+
+  <aside id="chatPanel" hidden>
+    <div class="chat-topo">
+      <strong>💬 Chat da sala</strong>
+      <button class="btn" onclick="toggleChat()" title="Fechar chat">✖</button>
+    </div>
+    <div id="chatMsgs" class="chat-msgs"></div>
+    <div class="chat-form">
+      <input id="chatInput" maxlength="500" placeholder="Escreva uma mensagem..." autocomplete="off" onkeydown="teclaChat(event)">
+      <button class="btn primary" onclick="enviarChat()">Enviar</button>
+    </div>
+  </aside>
+
+  <input type="file" id="avatarFile" accept="image/*" hidden>
+
+  <!-- Tela exibida quando há uma nova versão do app -->
+  <div id="atualizacao" hidden>
+    <div class="caixa-atualizacao">
+      <img src="mdb.png" alt="" class="logo-atualizacao">
+      <div class="giro"></div>
+      <h2>Nova versão disponível</h2>
+      <p id="atualizacaoTexto">Atualizando o Morro do Bingão...</p>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    const MAX_PESSOAS = 10;
+    const FPS_ALVO = 60;
+    const RESOLUCOES = {
+      '720':      { w: 1280, h: 720,  bitrate: 4000000 },
+      '1080':     { w: 1920, h: 1080, bitrate: 8000000 },
+      '1440':     { w: 2560, h: 1440, bitrate: 12000000 },
+      '2160':     { w: 3840, h: 2160, bitrate: 20000000 },
+      'original': { w: null, h: null, bitrate: 20000000 },
+    };
+
+    // Volume mínimo para contar como fala. O app também aprende o ruído de fundo.
+    const LIMITE_FALA = 0.02;
+    const CHAVE_TOKEN = 'morro_token';
+
+    const peers = new Map();          // id -> conexão e dados de cada amigo
+    const nomes = new Map();          // id -> nome de quem está na sala
+    const telaAtiva = new Set();      // quem está com a tela compartilhada
+    const avatarsRemotos = new Map();
+    const analisadores = new Map();
+    const falandoAte = new Map();
+    const audiosTela = new Map();     // id -> { fonte, ganho, alvo } (som da tela de cada pessoa)
+    const volTelaPorId = new Map();   // id -> volume do som da tela (0 a 1)
+
+    let micTrack = null;
+    let micSrcNode = null;
+    let micId = '';
+    let screenTrack = null;
+    let screenAudioTrack = null;
     let meVideo = null;
-    let audioContext = null;
-    let audioDestination = null;
-    let micSource = null;
-    let musicSource = null;
+    let resAtual = '1080';
+    let speakerId = '';
+    let deafened = false;
+
+    let meuAvatar = null;
+    let ultimoArquivoAvatar = null;
+
+    let audioCtx = null;
+    let mixDest = null;
+    let sendAudioTrack = null;
     let musicGain = null;
-    let musicElement = null;
-    let activeMusic = null;
+    let musicEl = null;
+    let musicSrc = null;
+    let loopFalaAtivo = false;
 
+    let logado = false;
+    let meuNome = '';
+    let abaAtual = 'entrar';
+    let minhaSala = '';
+    let estouNaCall = false;
+    let entrouNoServidor = false;
+    let entrando = false;
+    let derrubado = false;
 
-      if (micTrack) audioSender.replaceTrack(mixedAudioTrack());
-      if (screenTrack) videoSender.replaceTrack(screenTrack);
-    socket.on('signal', onSignal);
-    socket.on('music-state', (music) => music ? playMusic(music, false) : stopMusicLocal());
-    socket.on('music-play', (music) => playMusic(music, false));
-    socket.on('music-stop', stopMusicLocal);
+    let chatAberto = false;
+    let naoLidas = 0;
 
-    function toggleMic(btn) {
-      if (!micTrack && !audioDestination) return;
-      if (micTrack) micTrack.enabled = !micTrack.enabled;
-      btn.textContent = micTrack?.enabled === false ? 'Desmutar' : 'Mutar';
-    }
+    let versaoAtual = null;
+    let atualizando = false;
 
-    function ensureAudioMix() {
-      if (audioContext) return;
-      audioContext = new AudioContext();
-      audioDestination = audioContext.createMediaStreamDestination();
-      if (micTrack) {
-        micSource = audioContext.createMediaStreamSource(new MediaStream([micTrack]));
-        micSource.connect(audioDestination);
+    // Cronômetro da chamada
+    let inicioCall = 0;
+    let timerIntervalo = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    // ===== Utilidades =====
+
+    // Deixa o texto em maiúsculas enquanto a pessoa digita
+    function maiusculo(el) {
+      const pos = el.selectionStart;
+      const novo = el.value.toUpperCase();
+      if (el.value !== novo) {
+        el.value = novo;
+        el.setSelectionRange(pos, pos);
       }
-      peers.forEach((p) => p.audioSender.replaceTrack(mixedAudioTrack()));
     }
 
-    function mixedAudioTrack() {
-      if (!audioContext || !audioDestination) return micTrack;
-      return audioDestination.stream.getAudioTracks()[0];
+    function usuarioValido(nome) {
+      return /^[\p{L}\p{N}_]{3,20}$/u.test(nome);
     }
 
-    function toggleMusicPanel() {
-      const panel = $('music-panel');
-      panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+    function erroSenha(s) {
+      if (s.length < 8) return 'A senha precisa ter no mínimo 8 caracteres.';
+      if (!/\p{Lu}/u.test(s)) return 'A senha precisa ter pelo menos 1 letra maiúscula.';
+      if (!/\p{Nd}/u.test(s)) return 'A senha precisa ter pelo menos 1 número.';
+      return null;
+    }
+
+    function mensagemErro(motivo) {
+      const msgs = {
+        existe: 'Esse nome de usuário já existe. Escolha outro.',
+        dados: 'Usuário ou senha incorretos.',
+        bloqueado: 'Muitas tentativas erradas. Espere 1 minuto e tente de novo.',
+        nome: 'O nome de usuário precisa ter de 3 a 20 letras ou números, sem espaços.',
+        senha: 'Senha fraca: use no mínimo 8 caracteres, com 1 letra maiúscula e 1 número.',
+      };
+      return msgs[motivo] || 'Não foi possível concluir. Tente de novo.';
+    }
+
+    function mostrarErro(texto) {
+      $('loginErro').textContent = texto;
+      $('loginErro').hidden = !texto;
+    }
+
+    // ===== Login automático =====
+    const CHAVE_AUTO = 'morro_auto';
+
+    // Lê se a caixinha está marcada (padrão: marcada)
+    function lerPreferenciaAuto() {
+      try { return localStorage.getItem(CHAVE_AUTO) !== '0'; } catch (e) { return true; }
+    }
+
+    function salvarPreferenciaAuto(ativo) {
+      try { localStorage.setItem(CHAVE_AUTO, ativo ? '1' : '0'); } catch (e) {}
+    }
+
+    // Marcado: o login fica salvo no navegador, mesmo depois de fechar tudo.
+    // Desmarcado: o login fica só nesta aba. Atualizar a página não desloga.
+    function lerToken() {
+      try {
+        return localStorage.getItem(CHAVE_TOKEN) || sessionStorage.getItem(CHAVE_TOKEN);
+      } catch (e) { return null; }
+    }
+
+    function salvarToken(token) {
+      const lembrar = $('autoLogin').checked;
+      try {
+        localStorage.removeItem(CHAVE_TOKEN);
+        sessionStorage.removeItem(CHAVE_TOKEN);
+        (lembrar ? localStorage : sessionStorage).setItem(CHAVE_TOKEN, token);
+      } catch (e) {}
+    }
+
+    function apagarToken() {
+      try {
+        localStorage.removeItem(CHAVE_TOKEN);
+        sessionStorage.removeItem(CHAVE_TOKEN);
+      } catch (e) {}
+    }
+
+    // ===== Cronômetro da chamada =====
+
+    // Formata como 00:00 e, depois de 1 hora, como 1:00:00
+    function formatarTempo(ms) {
+      const total = Math.floor(ms / 1000);
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      const mm = String(m).padStart(2, '0');
+      const ss = String(s).padStart(2, '0');
+      return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+    }
+
+    function atualizarTimer() {
+      $('timer').textContent = formatarTempo(Date.now() - inicioCall);
+    }
+
+    // Usa a hora de início (e não um contador), então o tempo continua certo
+    // mesmo quando a aba fica em segundo plano e o navegador diminui a frequência
+    function iniciarTimer() {
+      if (timerIntervalo) return;
+      inicioCall = Date.now();
+      atualizarTimer();
+      timerIntervalo = setInterval(atualizarTimer, 1000);
+    }
+
+    // ===== Atualização automática =====
+    // O servidor envia a versão do código. Quando ela muda (depois de uma atualização no GitHub),
+    // a página mostra a tela de atualização e recarrega sozinha.
+
+    socket.on('versao', (v) => {
+      if (versaoAtual === null) {
+        versaoAtual = v;
+        return;
+      }
+      if (v !== versaoAtual) iniciarAtualizacao();
+    });
+
+    function iniciarAtualizacao() {
+      if (atualizando) return;
+      atualizando = true;
+
+      if (estouNaCall && minhaSala) {
+        // Guarda a sala para voltar para ela depois que a página recarregar
+        try {
+          sessionStorage.setItem('morro_retomar', JSON.stringify({ sala: minhaSala }));
+        } catch (e) {}
+        $('atualizacaoTexto').textContent = `Nova versão do app. Atualizando e voltando para a sala ${minhaSala} em alguns segundos...`;
+      } else {
+        $('atualizacaoTexto').textContent = 'Nova versão do app. Atualizando em alguns segundos...';
+      }
+
+      $('atualizacao').hidden = false;
+      setTimeout(() => location.reload(), 3000);
+    }
+
+    // Depois de uma atualização, volta para a sala em que a pessoa estava
+    function retomarAposAtualizacao() {
+      let dados = null;
+      try {
+        dados = JSON.parse(sessionStorage.getItem('morro_retomar') || 'null');
+        sessionStorage.removeItem('morro_retomar');
+      } catch (e) {}
+      if (!dados || !dados.sala) return;
+
+      $('room').value = dados.sala;
+      setTimeout(() => join(), 500);
+    }
+
+    // ===== Login e conta =====
+
+    function mudarAba(aba) {
+      abaAtual = aba;
+      const criando = aba === 'criar';
+      $('abaEntrar').classList.toggle('ativo', !criando);
+      $('abaCriar').classList.toggle('ativo', criando);
+      $('regras').hidden = !criando;
+      $('loginBtn').textContent = criando ? 'Criar conta' : 'Entrar';
+      $('loginSenha').autocomplete = criando ? 'new-password' : 'current-password';
+      mostrarErro('');
+    }
+
+    function teclaLogin(e) {
+      if (e.key === 'Enter') enviarLogin();
+    }
+
+    function enviarLogin() {
+      const usuario = $('loginUsuario').value.trim().toUpperCase();
+      const senha = $('loginSenha').value;
+      const criando = abaAtual === 'criar';
+      mostrarErro('');
+
+      if (!usuario || !senha) return mostrarErro('Preencha o nome de usuário e a senha.');
+      if (criando) {
+        if (!usuarioValido(usuario)) return mostrarErro('O nome de usuário precisa ter de 3 a 20 letras ou números, sem espaços.');
+        const erro = erroSenha(senha);
+        if (erro) return mostrarErro(erro);
+      }
+      if (!socket.connected) return mostrarErro('Sem conexão com o servidor. Aguarde e tente de novo.');
+
+      $('loginBtn').disabled = true;
+      socket.emit(criando ? 'cadastrar' : 'entrar', { usuario, senha }, (res) => {
+        $('loginBtn').disabled = false;
+        if (res && res.ok) {
+          salvarToken(res.token);
+          $('loginSenha').value = '';
+          definirUsuario(res.nome);
+          return;
+        }
+        mostrarErro(mensagemErro(res && res.motivo));
+      });
+    }
+
+    function definirUsuario(nome) {
+      meuNome = nome;
+      logado = true;
+      $('usuarioLogado').textContent = nome;
+      $('previewInicial').textContent = nome.charAt(0);
+      $('login').hidden = true;
+      $('setup').hidden = false;
+      retomarAposAtualizacao();
+    }
+
+    function mostrarTelaLogin() {
+      logado = false;
+      meuNome = '';
+      $('setup').hidden = true;
+      $('login').hidden = false;
+    }
+
+    function sairDaConta() {
+      const token = lerToken();
+      apagarToken();
+      if (token) socket.emit('sair-conta', token, () => {});
+      meuAvatar = null;
+      atualizarPreviewAvatar();
+      mostrarTelaLogin();
+    }
+
+    // ===== Conexão com o servidor =====
+
+    socket.on('connect', () => {
+      const token = lerToken();
+      if (!token) return;
+
+      socket.emit('retomar', token, (res) => {
+        if (atualizando) return; // a página vai recarregar
+
+        if (!res || !res.ok) {
+          apagarToken();
+          if (estouNaCall) {
+            alert('Sua sessão expirou. Entre na conta de novo.');
+            return location.reload();
+          }
+          return mostrarTelaLogin();
+        }
+
+        if (estouNaCall) {
+          // Caiu e voltou: entra de novo na sala automaticamente
+          if (!entrouNoServidor) {
+            limparParticipantes();
+            entrarNaSala();
+          }
+          return;
+        }
+        definirUsuario(res.nome);
+      });
+    });
+
+    socket.on('derrubado', () => {
+      derrubado = true;
+    });
+
+    socket.on('disconnect', (motivo) => {
+      entrouNoServidor = false;
+
+      if (derrubado) {
+        alert('Esta conta entrou na sala em outro aparelho ou aba. Esta janela será atualizada.');
+        return location.reload();
+      }
+      if (!estouNaCall) return;
+
+      $('status').textContent = 'Conexão caiu. Reconectando...';
+      adicionarMensagemSistema('Conexão caiu. Reconectando...');
+
+      // Quando o servidor encerra a conexão, o navegador não reconecta sozinho
+      if (motivo === 'io server disconnect') {
+        setTimeout(() => socket.connect(), 2000);
+      }
+    });
+
+    // ===== Entrar na sala =====
+
+    function atualizarStatus() {
+      const conectados = [...peers.values()].filter((p) => p.pc.connectionState === 'connected').length;
+      const total = peers.size;
+      $('status').textContent = total === 0
+        ? `Sala aberta. Esperando seus amigos entrarem (até ${MAX_PESSOAS} pessoas)...`
+        : `Conectados: ${conectados} de ${total} amigo(s)`;
+    }
+
+    function entrarNaSala() {
+      socket.emit('join-room', minhaSala, (res) => {
+        if (res && res.ok) {
+          entrouNoServidor = true;
+          atualizarStatus();
+          return;
+        }
+        const msgs = {
+          cheia: `Essa sala já tem ${MAX_PESSOAS} pessoas. Escolha outro nome de sala.`,
+          login: 'Sua sessão expirou. Entre na conta de novo.',
+          dados: 'Preencha o nome da sala.',
+        };
+        alert(msgs[res && res.motivo] || 'Não foi possível entrar na sala. Tente de novo.');
+        location.reload();
+      });
+    }
+
+    async function join() {
+      if (estouNaCall || entrando) return;
+      if (!logado) return alert('Entre na sua conta antes de entrar na sala.');
+      if (!socket.connected) return alert('Sem conexão com o servidor. Aguarde alguns segundos e tente de novo.');
+      if (!navigator.mediaDevices) return alert('Abra o endereço com https:// para usar o microfone e a tela.');
+
+      const sala = $('room').value.trim().toUpperCase();
+      if (!sala) return alert('Preencha o nome da sala.');
+
+      entrando = true;
+
+      try {
+        const mic = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: false,
+        });
+        micTrack = mic.getAudioTracks()[0];
+        micId = micTrack.getSettings().deviceId || '';
+      } catch (e) {
+        alert('Não consegui acessar o microfone. Libere a permissão do microfone no navegador e entre de novo. Por enquanto você vai ouvir, mas não vai conseguir falar.');
+      }
+
+      prepararAudio();
+      if (micTrack) criarAnalisador('me', micTrack);
+      iniciarLoopFala();
+
+      minhaSala = sala;
+      estouNaCall = true;
+      entrouNoServidor = false;
+
+      $('salaNome').textContent = sala;
+      document.title = `Sala ${sala} · Morro do Bingão`;
+
+      $('setup').hidden = true;
+      $('call').hidden = false;
+      iniciarTimer();
+      meVideo = addTile('me', `${meuNome} (você)`, true);
+      atualizarBotoesAudio();
+      listarDispositivos();
+
+      entrarNaSala();
+      entrando = false;
+    }
+
+    function teclaEntrar(e) {
+      if (e.key === 'Enter') join();
+    }
+
+    function limparParticipantes() {
+      [...peers.keys()].forEach((id) => removerParticipante(id));
+      nomes.clear();
+      avatarsRemotos.clear();
+      falandoAte.clear();
+      [...telaAtiva].forEach((id) => { if (id !== 'me') telaAtiva.delete(id); });
+      atualizarStatus();
+    }
+
+    function removerParticipante(id) {
+      const peer = peers.get(id);
+      desligarVoz(id);
+      pararAnalisador(id);
+      desligarAudioDaTela(id);
+      falandoAte.delete(id);
+      telaAtiva.delete(id);
+      if (peer) {
+        try { peer.pc.close(); } catch (e) {}
+        peers.delete(id);
+      }
+      $('tile-' + id)?.remove();
+    }
+
+    // ===== Quadros (cada pessoa tem um quadro) =====
+
+    function setAvatarEl(div, dataUrl) {
+      const circ = div.querySelector('.avatar-circ');
+      if (!circ) return;
+      if (dataUrl) {
+        circ.style.backgroundImage = `url("${dataUrl}")`;
+        circ.classList.add('com-foto');
+      } else {
+        circ.style.backgroundImage = '';
+        circ.classList.remove('com-foto');
+      }
+    }
+
+    function addTile(id, nome, muted = false) {
+      const div = document.createElement('div');
+      div.id = 'tile-' + id;
+      div.className = 'tile ' + (telaAtiva.has(id) ? 'compartilhando' : 'sem-video');
+      div.innerHTML = `
+        <video autoplay playsinline></video>
+        <div class="avatar"><div class="avatar-circ"><span></span></div></div>
+        <div class="topo"><span class="tag-tela">AO VIVO</span><div class="ctrl-tela"></div></div>
+        <div class="rodape"><span class="nome"></span><div class="ctrl-voz"></div></div>`;
+
+      const video = div.querySelector('video');
+      video.muted = muted;
+      div.querySelector('.nome').textContent = nome;
+      div.querySelector('.avatar span').textContent = nome.trim().charAt(0).toUpperCase();
+      setAvatarEl(div, id === 'me' ? meuAvatar : avatarsRemotos.get(id));
+      div.onclick = () => focarTile(div);
+
+      $('grid').appendChild(div);
+      montarControlesTela(div, id);
+      if (id !== 'me') montarControlesVoz(div, id);
+
+      if (!document.querySelector('.tile.focus')) focarTile(div);
+      aplicarSaidaEm(video);
+      video.play().catch(() => {});
+      return video;
+    }
+
+    function focarTile(div) {
+      document.querySelectorAll('.tile.focus').forEach((t) => t.classList.remove('focus'));
+      div.classList.add('focus');
+    }
+
+    // Mostra o vídeo da tela (ativa = true) ou o avatar (ativa = false).
+    // Toca um som quando alguém começa a compartilhar.
+    function definirTela(id, ativa) {
+      const jaEstava = telaAtiva.has(id);
+      if (ativa) telaAtiva.add(id);
+      else telaAtiva.delete(id);
+
+      const div = $('tile-' + id);
+      if (div) {
+        div.classList.toggle('sem-video', !ativa);
+        div.classList.toggle('compartilhando', ativa);
+        if (ativa) focarTile(div);
+      }
+
+      if (ativa && !jaEstava) somCompartilhar();
+    }
+
+    // Botões em cima do vídeo da transmissão: resolução (quem compartilha), volume e tela cheia
+    function montarControlesTela(div, id) {
+      const box = div.querySelector('.ctrl-tela');
+
+      if (id === 'me') {
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+          const sel = document.createElement('select');
+          sel.className = 'sel-res';
+          sel.title = 'Resolução da sua transmissão';
+          [['720', '720p'], ['1080', '1080p'], ['1440', '1440p'], ['2160', '4K'], ['original', 'Original']]
+            .forEach(([valor, texto]) => sel.appendChild(new Option(`${texto} · 60 fps`, valor)));
+          sel.value = resAtual;
+          sel.onchange = () => mudarResolucao(sel.value);
+          box.appendChild(sel);
+        }
+      } else {
+        const sl = document.createElement('input');
+        sl.type = 'range';
+        sl.min = '0';
+        sl.max = '100';
+        sl.value = String(Math.round((volTelaPorId.has(id) ? volTelaPorId.get(id) : 1) * 100));
+        sl.className = 'sl-tela';
+        sl.title = 'Volume do som da tela';
+        sl.oninput = () => mudarVolumeTela(id, sl.value / 100);
+        box.appendChild(sl);
+      }
+
+      if (document.documentElement.requestFullscreen) {
+        const b = document.createElement('button');
+        b.className = 'mini btn-full';
+        b.textContent = '⛶';
+        b.title = 'Tela cheia';
+        b.onclick = toggleFull;
+        box.appendChild(b);
+      }
+
+      // Clicar nesses botões não muda o quadro em destaque
+      box.addEventListener('click', (e) => e.stopPropagation());
+    }
+
+    // Controles de cada amigo: mutar, diminuir e aumentar o volume da voz (0% a 200%)
+    function montarControlesVoz(div, id) {
+      const box = div.querySelector('.ctrl-voz');
+      const bMudo = criarMini('🔊', 'Mutar este amigo', 'mudo');
+      const bMenos = criarMini('−', 'Diminuir o volume', 'menos');
+      const pct = document.createElement('span');
+      pct.className = 'pct';
+      const bMais = criarMini('+', 'Aumentar o volume', 'mais');
+
+      bMudo.onclick = () => {
+        const p = peers.get(id);
+        if (!p) return;
+        p.mutado = !p.mutado;
+        aplicarVolumeVoz(id);
+        atualizarControlesVoz(id);
+      };
+      bMenos.onclick = () => ajustarVolumeAmigo(id, -0.1);
+      bMais.onclick = () => ajustarVolumeAmigo(id, 0.1);
+
+      box.append(bMudo, bMenos, pct, bMais);
+      box.addEventListener('click', (e) => e.stopPropagation());
+      atualizarControlesVoz(id);
+    }
+
+    function criarMini(texto, titulo, acao) {
+      const b = document.createElement('button');
+      b.className = 'mini';
+      b.textContent = texto;
+      b.title = titulo;
+      b.dataset.acao = acao;
+      return b;
+    }
+
+    function atualizarControlesVoz(id) {
+      const p = peers.get(id);
+      const box = $('tile-' + id)?.querySelector('.ctrl-voz');
+      if (!p || !box) return;
+      const bMudo = box.querySelector('[data-acao="mudo"]');
+      bMudo.textContent = p.mutado ? '🔇' : '🔊';
+      bMudo.title = p.mutado ? 'Desmutar este amigo' : 'Mutar este amigo';
+      box.querySelector('.pct').textContent = p.mutado ? 'MUDO' : `${Math.round(p.volume * 100)}%`;
+    }
+
+    function ajustarVolumeAmigo(id, delta) {
+      const p = peers.get(id);
+      if (!p) return;
+      p.volume = Math.min(2, Math.max(0, Math.round((p.volume + delta) * 10) / 10));
+      if (p.volume > 0) p.mutado = false;
+      aplicarVolumeVoz(id);
+      atualizarControlesVoz(id);
+    }
+
+    // ===== Voz dos amigos (passa por um controle de volume próprio) =====
+
+    function ligarVoz(id, track) {
+      const peer = peers.get(id);
+      if (!audioCtx || !peer) return;
+      desligarVoz(id);
+
+      const fonte = audioCtx.createMediaStreamSource(new MediaStream([track]));
+      const ganho = audioCtx.createGain();
+      fonte.connect(ganho);
+      ganho.connect(audioCtx.destination);
+      peer.voz = { fonte, ganho };
+
+      aplicarVolumeVoz(id);
+      criarAnalisador(id, track);
+    }
+
+    function desligarVoz(id) {
+      const peer = peers.get(id);
+      if (!peer || !peer.voz) return;
+      try {
+        peer.voz.fonte.disconnect();
+        peer.voz.ganho.disconnect();
+      } catch (e) {}
+      peer.voz = null;
+    }
+
+    function aplicarVolumeVoz(id) {
+      const p = peers.get(id);
+      if (!p || !p.voz || !audioCtx) return;
+      const alvo = (p.mutado || deafened) ? 0 : p.volume;
+      p.voz.ganho.gain.setTargetAtTime(alvo, audioCtx.currentTime, 0.05);
+    }
+
+    // ===== Som da tela compartilhada (separado da voz) =====
+
+    function ligarAudioDaTela(id, track) {
+      if (!audioCtx) return;
+      desligarAudioDaTela(id);
+
+      const fonte = audioCtx.createMediaStreamSource(new MediaStream([track]));
+      const ganho = audioCtx.createGain();
+      fonte.connect(ganho);
+      ganho.connect(audioCtx.destination);
+
+      const alvo = alvoTela(id);
+      ganho.gain.value = alvo;
+      audiosTela.set(id, { fonte, ganho, alvo });
+    }
+
+    function desligarAudioDaTela(id) {
+      const a = audiosTela.get(id);
+      if (!a) return;
+      try {
+        a.fonte.disconnect();
+        a.ganho.disconnect();
+      } catch (e) {}
+      audiosTela.delete(id);
+    }
+
+    // Volume do som da tela: só o controle de cada pessoa e o botão de fone (mudo)
+    function alvoTela(id) {
+      const vol = volTelaPorId.has(id) ? volTelaPorId.get(id) : 1;
+      return (deafened ? 0 : 1) * vol;
+    }
+
+    function atualizarVolumeTela(forcar = false) {
+      if (!audioCtx) return;
+      audiosTela.forEach((a, id) => {
+        const alvo = alvoTela(id);
+        if (!forcar && a.alvo === alvo) return;
+        a.alvo = alvo;
+        a.ganho.gain.setTargetAtTime(alvo, audioCtx.currentTime, 0.2);
+      });
+    }
+
+    function mudarVolumeTela(id, valor) {
+      volTelaPorId.set(id, valor);
+      atualizarVolumeTela(true);
+    }
+
+    // ===== Sons de entrada, saída e compartilhamento (gerados pelo app, sem arquivos) =====
+
+    function tocarNotas(notas) {
+      if (!audioCtx || deafened) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const agora = audioCtx.currentTime;
+      notas.forEach(({ freq, inicio, duracao }) => {
+        const osc = audioCtx.createOscillator();
+        const ganho = audioCtx.createGain();
+        const t0 = agora + inicio;
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        ganho.gain.setValueAtTime(0.0001, t0);
+        ganho.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
+        ganho.gain.exponentialRampToValueAtTime(0.0001, t0 + duracao);
+        osc.connect(ganho);
+        ganho.connect(audioCtx.destination); // só você ouve
+        osc.start(t0);
+        osc.stop(t0 + duracao + 0.05);
+      });
+    }
+
+    // Entrou: dois tons subindo
+    function somEntrar() {
+      tocarNotas([
+        { freq: 660, inicio: 0, duracao: 0.15 },
+        { freq: 880, inicio: 0.14, duracao: 0.25 },
+      ]);
+    }
+
+    // Saiu: dois tons descendo
+    function somSair() {
+      tocarNotas([
+        { freq: 880, inicio: 0, duracao: 0.15 },
+        { freq: 440, inicio: 0.14, duracao: 0.3 },
+      ]);
+    }
+
+    // Começou a compartilhar: um som curto que sobe de forma rápida e contínua,
+    // com timbre diferente (triângulo) dos sons de entrar e sair
+    function somCompartilhar() {
+      if (!audioCtx || deafened) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const agora = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const ganho = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, agora);
+      osc.frequency.exponentialRampToValueAtTime(1320, agora + 0.25);
+      ganho.gain.setValueAtTime(0.0001, agora);
+      ganho.gain.exponentialRampToValueAtTime(0.22, agora + 0.03);
+      ganho.gain.exponentialRampToValueAtTime(0.0001, agora + 0.35);
+      osc.connect(ganho);
+      ganho.connect(audioCtx.destination); // só você ouve
+      osc.start(agora);
+      osc.stop(agora + 0.4);
+    }
+
+    // ===== Brilho de quem está falando =====
+
+    function criarAnalisador(id, track) {
+      if (!audioCtx || !track) return;
+      pararAnalisador(id);
+      const source = audioCtx.createMediaStreamSource(new MediaStream([track]));
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      const silencio = audioCtx.createGain();
+      silencio.gain.value = 0;
+      source.connect(analyser);
+      analyser.connect(silencio);
+      silencio.connect(audioCtx.destination);
+      analisadores.set(id, {
+        source,
+        analyser,
+        silencio,
+        dados: new Uint8Array(analyser.fftSize),
+        ruido: 0.01,
+        inicioFala: 0,
+      });
+    }
+
+    function pararAnalisador(id) {
+      const a = analisadores.get(id);
+      if (!a) return;
+      try {
+        a.source.disconnect();
+        a.analyser.disconnect();
+        a.silencio.disconnect();
+      } catch (e) {}
+      analisadores.delete(id);
+    }
+
+    function iniciarLoopFala() {
+      if (loopFalaAtivo) return;
+      loopFalaAtivo = true;
+
+      // setInterval continua funcionando com a aba em segundo plano
+      setInterval(() => {
+        const agora = Date.now();
+
+        analisadores.forEach((a, id) => {
+          a.analyser.getByteTimeDomainData(a.dados);
+          let soma = 0;
+          for (let i = 0; i < a.dados.length; i++) {
+            const v = (a.dados[i] - 128) / 128;
+            soma += v * v;
+          }
+          const volume = Math.sqrt(soma / a.dados.length);
+
+          // Aprende o ruído de fundo quando ninguém fala
+          if (volume < a.ruido * 1.5 + 0.005) {
+            a.ruido = a.ruido * 0.97 + volume * 0.03;
+          }
+
+          // Conta como fala só se estiver bem acima do ruído e durar um pouco
+          const limite = Math.max(LIMITE_FALA, a.ruido * 3);
+          if (volume > limite) {
+            if (!a.inicioFala) a.inicioFala = agora;
+            if (agora - a.inicioFala > 150) falandoAte.set(id, agora + 350);
+          } else {
+            a.inicioFala = 0;
+          }
+
+          let falando = (falandoAte.get(id) || 0) > agora;
+          if (id === 'me' && micTrack && !micTrack.enabled) falando = false;
+
+          const div = $('tile-' + id);
+          if (div) div.classList.toggle('falando', falando);
+        });
+      }, 80);
+    }
+
+    // ===== Foto de perfil (escolhida antes de entrar na sala) =====
+
+    function escolherAvatar() {
+      $('avatarFile').click();
+    }
+
+    $('avatarFile').addEventListener('change', (e) => {
+      const arquivo = e.target.files[0];
+      e.target.value = '';
+      if (arquivo) usarArquivoAvatar(arquivo);
+    });
+
+    function reduzirImagem(arquivo, tamanho, modo) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(arquivo);
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = tamanho;
+          canvas.height = tamanho;
+          const ctx = canvas.getContext('2d');
+
+          if (modo === 'inteira') {
+            ctx.fillStyle = '#0a0414';
+            ctx.fillRect(0, 0, tamanho, tamanho);
+            const escala = Math.min(tamanho / img.width, tamanho / img.height);
+            const w = img.width * escala;
+            const h = img.height * escala;
+            ctx.drawImage(img, (tamanho - w) / 2, (tamanho - h) / 2, w, h);
+          } else {
+            const lado = Math.min(img.width, img.height);
+            const sx = (img.width - lado) / 2;
+            const sy = (img.height - lado) / 2;
+            ctx.drawImage(img, sx, sy, lado, lado, 0, 0, tamanho, tamanho);
+          }
+
+          URL.revokeObjectURL(url);
+          resolve(canvas.toDataURL('image/jpeg', 0.9));
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('Imagem inválida'));
+        };
+        img.src = url;
+      });
+    }
+
+    async function usarArquivoAvatar(arquivo) {
+      ultimoArquivoAvatar = arquivo;
+      try {
+        meuAvatar = await reduzirImagem(arquivo, 300, $('modoAvatar').value);
+      } catch (err) {
+        alert('Não consegui abrir essa imagem. Tente outra, de preferência em JPG ou PNG.');
+        return;
+      }
+      atualizarPreviewAvatar();
+      peers.forEach((p, id) => enviarAvatarPara(id));
+    }
+
+    function reaplicarAvatar() {
+      if (ultimoArquivoAvatar) usarArquivoAvatar(ultimoArquivoAvatar);
+    }
+
+    function atualizarPreviewAvatar() {
+      const prev = $('previewAvatar');
+      if (meuAvatar) {
+        prev.style.backgroundImage = `url("${meuAvatar}")`;
+        prev.classList.add('com-foto');
+      } else {
+        prev.style.backgroundImage = '';
+        prev.classList.remove('com-foto');
+      }
+    }
+
+    function enviarAvatarPara(id) {
+      if (meuAvatar) socket.emit('signal', { to: id, data: { avatar: meuAvatar } });
+    }
+
+    function salvarAvatarRemoto(id, dataUrl) {
+      avatarsRemotos.set(id, dataUrl);
+      const div = $('tile-' + id);
+      if (div) setAvatarEl(div, dataUrl);
+    }
+
+    // ===== Chat de texto =====
+
+    function toggleChat() {
+      chatAberto = !chatAberto;
+      $('chatPanel').hidden = !chatAberto;
+      $('chatBtn').classList.toggle('ativo', chatAberto);
+      if (chatAberto) {
+        naoLidas = 0;
+        atualizarBadge();
+        rolarChat();
+        setTimeout(() => $('chatInput').focus(), 50);
+      }
+    }
+
+    function atualizarBadge() {
+      const b = $('chatBadge');
+      b.hidden = naoLidas === 0;
+      b.textContent = naoLidas > 9 ? '9+' : String(naoLidas);
+    }
+
+    function rolarChat() {
+      const box = $('chatMsgs');
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function horaFormatada(ts) {
+      return new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Usa textContent, então o texto nunca é interpretado como código
+    function adicionarMensagem({ name, text, hora, eu }) {
+      const div = document.createElement('div');
+      div.className = 'msg' + (eu ? ' eu' : '');
+
+      const cab = document.createElement('div');
+      cab.className = 'cab';
+      const autor = document.createElement('strong');
+      autor.textContent = name;
+      const quando = document.createElement('span');
+      quando.textContent = horaFormatada(hora);
+      cab.append(autor, quando);
+
+      const corpo = document.createElement('div');
+      corpo.className = 'txt';
+      corpo.textContent = text;
+
+      div.append(cab, corpo);
+      $('chatMsgs').appendChild(div);
+      rolarChat();
+    }
+
+    function adicionarMensagemSistema(texto) {
+      const div = document.createElement('div');
+      div.className = 'msg sistema';
+      div.textContent = texto;
+      $('chatMsgs').appendChild(div);
+      rolarChat();
+    }
+
+    function teclaChat(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        enviarChat();
+      }
+    }
+
+    function enviarChat() {
+      const input = $('chatInput');
+      const texto = input.value.trim();
+      if (!texto) return;
+
+      if (!estouNaCall || !entrouNoServidor) {
+        adicionarMensagemSistema('Você está reconectando. Tente enviar de novo em instantes.');
+        return;
+      }
+
+      socket.emit('chat', texto, (res) => {
+        if (res && res.ok) return;
+        if (res && res.motivo === 'devagar') {
+          adicionarMensagemSistema('Calma: você enviou muitas mensagens seguidas. Espere alguns segundos.');
+        } else {
+          adicionarMensagemSistema('Mensagem não enviada. Tente de novo.');
+        }
+      });
+
+      input.value = '';
+      input.focus();
+    }
+
+    socket.on('chat-msg', (msg) => {
+      const eu = msg.id === socket.id;
+      adicionarMensagem({ name: msg.name, text: msg.text, hora: msg.hora, eu });
+
+      if (!eu && !chatAberto) {
+        naoLidas++;
+        atualizarBadge();
+      }
+    });
+
+    // ===== Música =====
+
+    function togglePainelMusica() {
+      const painel = $('musicPanel');
+      painel.hidden = !painel.hidden;
+      $('musicToggleBtn').classList.toggle('ativo', !painel.hidden);
+    }
+
+    function escolherMusica() {
+      $('musicFile').click();
+    }
+
+    $('musicFile').addEventListener('change', (e) => {
+      const arquivo = e.target.files[0];
+      if (!arquivo) return;
+      if (!audioCtx) {
+        e.target.value = '';
+        return alert('Entre na sala antes de tocar uma música.');
+      }
+
+      if (musicEl) {
+        musicEl.pause();
+        URL.revokeObjectURL(musicEl.src);
+      }
+      if (musicSrc) {
+        try { musicSrc.disconnect(); } catch (err) {}
+      }
+
+      musicEl = new Audio(URL.createObjectURL(arquivo));
+      musicEl.onplay = () => { $('musicPlayBtn').textContent = '⏸️ Pausar'; };
+      musicEl.onpause = () => { $('musicPlayBtn').textContent = '▶️ Tocar'; };
+      musicEl.onended = () => { $('musicPlayBtn').textContent = '▶️ Tocar'; };
+
+      musicSrc = audioCtx.createMediaElementSource(musicEl);
+      musicSrc.connect(musicGain);
+
+      $('musicNome').textContent = '🎵 ' + arquivo.name;
+      e.target.value = '';
+      togglePlayMusica();
+    });
+
+    function togglePlayMusica() {
+      if (!musicEl) return escolherMusica();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      if (musicEl.paused) musicEl.play().catch(() => {});
+      else musicEl.pause();
+    }
+
+    function pararMusica() {
+      if (!musicEl) return;
+      musicEl.pause();
+      musicEl.currentTime = 0;
+    }
+
+    function ajustarVolumeMusica(valor) {
+      if (musicGain) musicGain.gain.value = valor / 100;
+    }
+
+    // ===== Microfone e fone =====
+
+    function toggleMic() {
+      if (!micTrack) return alert('Seu microfone não foi liberado. Ajuste a permissão no navegador e entre na sala de novo.');
+      micTrack.enabled = !micTrack.enabled;
+      atualizarBotoesAudio();
+    }
+
+    // Para de ouvir os amigos (sua voz continua sendo enviada)
+    function toggleFone() {
+      deafened = !deafened;
+      peers.forEach((p, id) => aplicarVolumeVoz(id));
+      atualizarVolumeTela(true);
+      atualizarBotoesAudio();
+    }
+
+    function atualizarBotoesAudio() {
+      const m = $('micBtn');
+      const mutado = !!micTrack && !micTrack.enabled;
+      m.textContent = mutado ? '🔇 Microfone mutado' : '🎤 Microfone';
+      m.classList.toggle('ativo', mutado);
+
+      const f = $('foneBtn');
+      f.textContent = deafened ? '🔕 Fone mutado' : '🎧 Fone';
+      f.classList.toggle('ativo', deafened);
+    }
+
+    // ===== Menus de dispositivos =====
+
+    function toggleMenu(tipo) {
+      const menu = $('menu-' + tipo);
+      const abrir = menu.hidden;
+      fecharMenus();
+      if (abrir) {
+        menu.hidden = false;
+        listarDispositivos();
+      }
+    }
+
+    function fecharMenus() {
+      document.querySelectorAll('.menu').forEach((m) => { m.hidden = true; });
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.split')) fecharMenus();
+    });
+
+    function renderMenu(tipo, lista, atual, acao, titulo, avisoVazio) {
+      const menu = $('menu-' + tipo);
+      menu.innerHTML = '';
+
+      const t = document.createElement('div');
+      t.className = 'menu-titulo';
+      t.textContent = titulo;
+      menu.appendChild(t);
+
+      if (!lista.length) {
+        const vazio = document.createElement('div');
+        vazio.className = 'menu-titulo';
+        vazio.textContent = avisoVazio;
+        menu.appendChild(vazio);
+        return;
+      }
+
+      lista.forEach((d, i) => {
+        const b = document.createElement('button');
+        const selecionado = d.deviceId === atual;
+        const nome = limparNome(d.label) || `Dispositivo ${i + 1}`;
+        b.className = 'menu-item' + (selecionado ? ' sel' : '');
+        b.textContent = (selecionado ? '✔ ' : '') + nome;
+        b.onclick = () => {
+          fecharMenus();
+          acao(d.deviceId);
+        };
+        menu.appendChild(b);
+      });
+    }
+
+    function limparNome(nome) {
+      return (nome || '').replace(/^(Padrão|Default|Comunicação|Communications)\s*-\s*/i, '');
+    }
+
+    async function listarDispositivos() {
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const ignorar = (d) => d.deviceId === 'default' || d.deviceId === 'communications';
+
+        const mics = devs.filter((d) => d.kind === 'audioinput' && !ignorar(d));
+        const saidas = devs.filter((d) => d.kind === 'audiooutput' && !ignorar(d));
+
+        renderMenu(
+          'mic', mics, micId, trocarMicrofone,
+          '🎤 Escolha o microfone',
+          'Nenhum microfone encontrado'
+        );
+
+        const suportaSaida = 'setSinkId' in HTMLMediaElement.prototype;
+        renderMenu(
+          'spk', saidas, speakerId, trocarSaida,
+          '🎧 Escolha o fone ou caixa de som',
+          suportaSaida ? 'Nenhuma saída de áudio encontrada' : 'Seu aparelho não permite trocar a saída de áudio. Use Chrome ou Edge no computador.'
+        );
+      } catch (e) {
+        console.log('Não foi possível listar os dispositivos:', e);
+      }
+    }
+
+    async function trocarMicrofone(deviceId) {
+      if (!audioCtx) return;
+      const estavaLigado = micTrack ? micTrack.enabled : true;
+      try {
+        const novo = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: deviceId ? { exact: deviceId } : undefined,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        });
+        const novaTrack = novo.getAudioTracks()[0];
+        novaTrack.enabled = estavaLigado;
+
+        if (micTrack) micTrack.stop();
+        if (micSrcNode) micSrcNode.disconnect();
+
+        micTrack = novaTrack;
+        micId = novaTrack.getSettings().deviceId || deviceId;
+        micSrcNode = audioCtx.createMediaStreamSource(new MediaStream([micTrack]));
+        micSrcNode.connect(mixDest);
+        criarAnalisador('me', micTrack);
+
+        atualizarBotoesAudio();
+        listarDispositivos();
+      } catch (e) {
+        alert('Não consegui usar esse microfone. Tente outro na lista.');
+      }
+    }
+
+    function trocarSaida(deviceId) {
+      speakerId = deviceId;
+      aplicarSaidaGeral();
+      listarDispositivos();
+    }
+
+    function aplicarSaidaEm(elemento) {
+      if (elemento && typeof elemento.setSinkId === 'function') {
+        elemento.setSinkId(speakerId).catch(() => {});
+      }
+    }
+
+    function aplicarSaidaGeral() {
+      document.querySelectorAll('video, audio').forEach(aplicarSaidaEm);
+      if (audioCtx && typeof audioCtx.setSinkId === 'function') {
+        audioCtx.setSinkId(speakerId).catch(() => {});
+      }
+    }
+
+    if (navigator.mediaDevices) {
+      navigator.mediaDevices.addEventListener('devicechange', () => listarDispositivos());
+    }
+
+    // ===== Áudio geral =====
+
+    // Libera o som do navegador no primeiro clique, sem precisar de botão
+    function liberarSom() {
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      document.querySelectorAll('video').forEach((v) => {
+        if (!v.muted && v.paused) v.play().catch(() => {});
+      });
+    }
+    ['click', 'keydown', 'touchstart'].forEach((ev) => {
+      document.addEventListener(ev, liberarSom, { passive: true });
+    });
+
+    function prepararAudio() {
+      audioCtx = new AudioContext();
+      mixDest = audioCtx.createMediaStreamDestination();
+
+      if (micTrack) {
+        micSrcNode = audioCtx.createMediaStreamSource(new MediaStream([micTrack]));
+        micSrcNode.connect(mixDest);
+      }
+
+      // A música vai para os amigos e também para você ouvir
+      musicGain = audioCtx.createGain();
+      musicGain.gain.value = 0.6;
+      musicGain.connect(mixDest);
+      musicGain.connect(audioCtx.destination);
+
+      sendAudioTrack = mixDest.stream.getAudioTracks()[0];
+    }
+
+    // ===== Conexão entre as pessoas (WebRTC) =====
+
+    function createPC(id, nome = 'PARTICIPANTE') {
+      if (peers.has(id)) return peers.get(id);
+
+      const pc = new RTCPeerConnection(ICE);
+      const remote = new MediaStream();
+
+      // Três canais: voz, vídeo da tela e áudio da tela
+      const audioSender = pc.addTransceiver('audio', { direction: 'sendrecv' }).sender;
+      const videoSender = pc.addTransceiver('video', { direction: 'sendrecv' }).sender;
+      const screenAudioSender = pc.addTransceiver('audio', { direction: 'sendrecv' }).sender;
+
+      const peer = {
+        pc, nome, audioSender, videoSender, screenAudioSender,
+        polite: socket.id < id,
+        makingOffer: false,
+        ignoreOffer: false,
+        vozRecebida: false,
+        volume: 1,
+        mutado: false,
+        voz: null,
+      };
+      peers.set(id, peer);
+
+      if (sendAudioTrack) audioSender.replaceTrack(sendAudioTrack).catch(() => {});
+      if (screenTrack) {
+        videoSender.replaceTrack(screenTrack).catch(() => {});
+        socket.emit('signal', { to: id, data: { tela: true } });
+      }
+      if (screenAudioTrack) screenAudioSender.replaceTrack(screenAudioTrack).catch(() => {});
+      ajustarQualidade(videoSender);
+      enviarAvatarPara(id);
+
+      const video = addTile(id, nome);
+      video.srcObject = remote;
+
+      pc.ontrack = ({ track }) => {
+        // Vídeo da tela: vai para o quadro
+        if (track.kind === 'video') {
+          remote.addTrack(track);
+          video.play().catch(() => {});
+          return;
+        }
+        // 1ª faixa de áudio = voz. As seguintes = som da tela compartilhada.
+        if (peer.vozRecebida) {
+          ligarAudioDaTela(id, track);
+          return;
+        }
+        peer.vozRecebida = true;
+        ligarVoz(id, track);
+      };
+
+      pc.onnegotiationneeded = async () => {
+        try {
+          peer.makingOffer = true;
+          await pc.setLocalDescription();
+          socket.emit('signal', { to: id, data: { description: pc.localDescription } });
+          ajustarQualidade(videoSender);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          peer.makingOffer = false;
+        }
+      };
+
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) socket.emit('signal', { to: id, data: { candidate } });
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed') pc.restartIce();
+        atualizarStatus();
+      };
+
+      return peer;
+    }
+
+    async function onSignal({ from, data }) {
+      if (data.avatar) {
+        salvarAvatarRemoto(from, data.avatar);
+        return;
+      }
+
+      if (data.tela !== undefined) {
+        definirTela(from, !!data.tela);
+        return;
+      }
+
+      let peer = peers.get(from);
+      if (!peer) {
+        // Só aceita conexão de quem já entrou na sala
+        if (!nomes.has(from)) return;
+        peer = createPC(from, nomes.get(from));
+      }
+
+      const pc = peer.pc;
+      const { description, candidate } = data;
+
+      if (description) {
+        const offerCollision =
+          description.type === 'offer' && (peer.makingOffer || pc.signalingState !== 'stable');
+        peer.ignoreOffer = !peer.polite && offerCollision;
+        if (peer.ignoreOffer) return;
+
+        await pc.setRemoteDescription(description);
+        if (description.type === 'offer') {
+          await pc.setLocalDescription();
+          socket.emit('signal', { to: from, data: { description: pc.localDescription } });
+          ajustarQualidade(peer.videoSender);
+        }
+      } else if (candidate) {
+        try {
+          await pc.addIceCandidate(candidate);
+        } catch (e) {
+          if (!peer.ignoreOffer) console.error(e);
+        }
+      }
+    }
+
+    // ===== Eventos do servidor =====
+
+    socket.on('existing-users', (users) => {
+      users.forEach((u) => {
+        nomes.set(u.id, u.name);
+        createPC(u.id, u.name);
+      });
+      atualizarStatus();
+    });
+
+    socket.on('user-joined', ({ id, name }) => {
+      nomes.set(id, name);
+      createPC(id, name);
+      somEntrar();
+      adicionarMensagemSistema(`${name} entrou na sala`);
+      reajustarTodos();
+      atualizarStatus();
+    });
+
+    socket.on('signal', onSignal);
+
+    socket.on('user-left', (id) => {
+      const nome = nomes.get(id);
+      const existia = peers.has(id);
+
+      removerParticipante(id);
+      nomes.delete(id);
+      avatarsRemotos.delete(id);
+
+      if (existia) {
+        somSair();
+        if (nome) adicionarMensagemSistema(`${nome} saiu da sala`);
+      }
+      reajustarTodos();
+      atualizarStatus();
+    });
+
+    function reajustarTodos() {
+      peers.forEach((p) => ajustarQualidade(p.videoSender));
+    }
+
+    // Ajusta a qualidade do envio, dividindo a banda entre as pessoas da sala
+    function ajustarQualidade(sender) {
+      if (!sender || !sender.track || sender.track.kind !== 'video') return;
+      try {
+        const params = sender.getParameters();
+        if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+        const pessoas = Math.max(1, peers.size);
+        params.encodings[0].maxBitrate = Math.max(500000, Math.floor(RESOLUCOES[resAtual].bitrate / pessoas));
+        params.encodings[0].maxFramerate = FPS_ALVO;
+        params.degradationPreference = 'maintain-framerate';
+        sender.setParameters(params).catch(() => {});
+      } catch (e) {
+        // Alguns navegadores só aceitam depois da negociação
+      }
+    }
+
+    // ===== Compartilhar tela =====
+
+    async function toggleShare() {
+      if (screenTrack) return stopShare();
+
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: restricoesVideo(),
+          audio: true,
+        });
+
+        screenTrack = stream.getVideoTracks()[0];
+        screenTrack.contentHint = 'motion';
+        screenTrack.onended = stopShare;
+
+        screenAudioTrack = stream.getAudioTracks()[0] || null;
+
+        meVideo.srcObject = new MediaStream([screenTrack]);
+        definirTela('me', true);
+
+        peers.forEach((p, id) => {
+          p.videoSender.replaceTrack(screenTrack).catch(() => {});
+          if (screenAudioTrack) p.screenAudioSender.replaceTrack(screenAudioTrack).catch(() => {});
+          socket.emit('signal', { to: id, data: { tela: true } });
+        });
+        reajustarTodos();
+
+        $('shareBtn').textContent = '⏹️ Parar de compartilhar';
+        $('shareBtn').classList.add('ativo');
+      } catch (e) {
+        console.log('Compartilhamento cancelado:', e);
+      }
+    }
+
+    function restricoesVideo() {
+      const r = RESOLUCOES[resAtual];
+      const v = { frameRate: { ideal: FPS_ALVO, max: FPS_ALVO } };
+      if (r.w) {
+        v.width = { ideal: r.w };
+        v.height = { ideal: r.h };
+      }
+      return v;
+    }
+
+    async function mudarResolucao(valor) {
+      resAtual = valor;
+      if (screenTrack) {
+        try {
+          await screenTrack.applyConstraints(restricoesVideo());
+        } catch (e) {
+          console.log('Não foi possível mudar a resolução agora:', e);
+        }
+      }
+      reajustarTodos();
+    }
+
+    function stopShare() {
+      if (!screenTrack) return;
+      screenTrack.onended = null;
+      screenTrack.stop();
+      screenTrack = null;
+      if (screenAudioTrack) screenAudioTrack.stop();
+      screenAudioTrack = null;
+
+      meVideo.srcObject = null;
+      definirTela('me', false);
+
+      peers.forEach((p, id) => {
+        p.videoSender.replaceTrack(null).catch(() => {});
+        p.screenAudioSender.replaceTrack(null).catch(() => {});
+        socket.emit('signal', { to: id, data: { tela: false } });
+      });
+
+      $('shareBtn').textContent = '🖥️ Compartilhar tela';
+      $('shareBtn').classList.remove('ativo');
+    }
+
+    // ===== Tela cheia (ocupa o monitor inteiro) =====
+
+    function toggleFull() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {
+          alert('Seu navegador não permitiu a tela cheia.');
+        });
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+      const cheia = !!document.fullscreenElement;
+      document.body.classList.toggle('tela-cheia', cheia);
+      document.querySelectorAll('.btn-full').forEach((b) => {
+        b.textContent = cheia ? '🔲' : '⛶';
+        b.title = cheia ? 'Sair da tela cheia' : 'Tela cheia';
+      });
+    });
+
+    // ===== Inicialização e adaptação para celular =====
+
+    $('autoLogin').checked = lerPreferenciaAuto();
+    mudarAba('entrar');
+
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)) {
+      $('shareBtn').hidden = true;
+    }
+
+    // Aparelhos sem troca de saída de áudio (ex.: iPhone) não mostram o menu
+    if (!('setSinkId' in HTMLMediaElement.prototype)) {
+      $('menu-spk').hidden = true;
+      $('spkCaret').hidden = true;
+    }
+
+    if (window.matchMedia('(max-width: 600px)').matches) {
+      $('dicaCelular').textContent = 'Toque em um vídeo para colocá-lo em destaque. Cada amigo tem botões para mutar e ajustar o volume. Até 10 pessoas por sala. Compartilhar tela só funciona em computadores e em alguns celulares Android.';
+    }
+  </script>
+</body>
+</html>
