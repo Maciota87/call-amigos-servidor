@@ -586,7 +586,7 @@ socket.on('room-sound-request', (tipo) => {
 
 }); // fecha io.on('connection')
 
-// Cria a tabela de contas sozinho, se ela ainda não existir
+// Cria as tabelas sozinho, se ainda não existirem
 async function iniciar() {
   if (!process.env.DATABASE_URL) {
     throw new Error('A variável DATABASE_URL não está configurada no Render (Environment).');
@@ -608,7 +608,7 @@ async function iniciar() {
       dados JSONB NOT NULL DEFAULT '{}'::jsonb
     )
   `);
-  
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS amizades (
       solicitante TEXT NOT NULL,
@@ -618,14 +618,7 @@ async function iniciar() {
       PRIMARY KEY (solicitante, destinatario)
     )
   `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS servidor_membros (
-      servidor_id TEXT NOT NULL REFERENCES servidores(id) ON DELETE CASCADE,
-      usuario TEXT NOT NULL REFERENCES contas(chave) ON DELETE CASCADE,
-      criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (servidor_id, usuario)
-    )
-  `);
+
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT} (versão ${VERSAO})`));
 }
