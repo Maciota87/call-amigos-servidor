@@ -303,6 +303,42 @@
   background: #6d28d9;
 }
         .electron-app .downloads { display: none; }
+    .painel-convite {
+  max-width: 420px;
+  margin: 10px auto;
+  padding: 14px;
+  background: var(--cinza);
+  border-radius: 14px;
+}
+
+.painel-convite-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.convite-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 500;
+  width: min(360px, calc(100vw - 32px));
+  padding: 16px;
+  background: var(--cinza);
+  border: 2px solid var(--lilas-claro);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px #0008;
+}
+
+.convite-toast p {
+  margin: 8px 0;
+}
+
+.convite-toast > div {
+  display: flex;
+  gap: 8px;
+}
   </style>
 </head>
 <body>
@@ -385,6 +421,8 @@
     <div id="grid"></div>
 
     <nav id="controls">
+      <button class="btn" onclick="abrirPainelConvite()">👥 Convidar amigo</button>
+      
       <div class="split">
         <button id="micBtn" class="btn principal" onclick="toggleMic()">🎤 Microfone</button>
         <button class="btn caret" onclick="toggleMenu('mic')" title="Escolher microfone">▲</button>
@@ -402,6 +440,14 @@
       <button id="chatBtn" class="btn" onclick="toggleChat()">💬 Chat<span id="chatBadge" class="badge" hidden>0</span></button>
       <button class="btn danger" onclick="location.reload()">📞 Sair da chamada</button>
     </nav>
+    
+    <div id="painelConviteAmigo" class="painel-convite" hidden>
+  <div class="painel-convite-topo">
+    <strong>Convidar um amigo</strong>
+    <button class="btn pequeno" onclick="fecharPainelConvite()">Fechar</button>
+  </div>
+  <div id="amigosParaConvidar" class="lista-amigos"></div>
+</div>
 
     <div id="musicPanel" hidden>
       <span id="musicNome">Nenhuma música escolhida</span>
@@ -428,6 +474,16 @@
     </div>
   </aside>
 
+<aside id="conviteRecebido" class="convite-toast" hidden>
+  <strong>Convite para a sala</strong>
+  <p id="conviteTexto"></p>
+  <p>Expira em <span id="conviteContagem">20</span> segundos</p>
+  <div>
+    <button class="btn primary" onclick="aceitarConviteSala()">Aceitar</button>
+    <button class="btn" onclick="recusarConviteSala()">Recusar</button>
+  </div>
+</aside>
+  
   <input type="file" id="avatarFile" accept="image/*" hidden>
 
   <!-- Tela exibida quando há uma nova versão do app -->
@@ -442,6 +498,131 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    let conviteAtual = null;
+let temporizadorConvite = null;
+
+function abrirPainelConvite() {
+  $('painelConviteAmigo').hidden = false;
+  const lista = $('amigosParaConvidar');
+  lista.innerHTML = '<p class="dica">Carregando amigos...</p>';
+
+  socket.emit('amigos-listar', (res) => {
+    lista.innerHTML = '';
+
+    if (!res || !res.ok) {
+      lista.innerHTML = '<p class="dica">Não consegui carregar seus amigos.</p>';
+      return;
+    }
+
+    if (!res.amigos.length) {
+      lista.innerHTML = '<p class="dica">Você ainda não tem amigos.</p>';
+      return;
+    }
+
+    res.amigos.forEach((amigo) => {
+      const linha = document.createElement('div');
+      linha.className = 'amigo-item';
+
+      const nome = document.createElement('span');
+      nome.className = 'nome-amigo';
+      nome.textContent = `${amigo.nome} — ${amigo.online ? 'online' : 'offline'}`;
+
+      const botao = document.createElement('button');
+      botao.className = 'btn pequeno';
+      botao.textContent = 'Convidar';
+      botao.disabled = !amigo.online;
+      botao.onclick = () => enviarConviteSala(amigo.chave);
+
+      linha.append(nome, botao);
+      lista.appendChild(linha);
+    });
+  });
+}
+
+function fecharPainelConvite() {
+  $('painelConviteAmigo').hidden = true;
+}
+
+function enviarConviteSala(chaveAmigo) {
+  socket.emit('convidar-amigo', chaveAmigo, (res) => {
+    if (res?.ok) {
+      alert('Convite enviado!');
+      fecharPainelConvite();
+      return;
+    }
+
+    const mensagens = {
+      offline: 'Esse amigo está offline ou já está em outra sala.',
+      'fora-da-sala': 'Entre em uma sala antes de convidar.',
+      'nao-amigo': 'Só é possível convidar alguém que já é seu amigo.',
+      login: 'Entre na sua conta novamente.',
+    };
+
+    alert(mensagens[res?.motivo] || 'Não consegui enviar o convite.');
+  });
+}
+
+socket.on('convite-sala', (convite) => {
+  conviteAtual = convite;
+  $('conviteTexto').textContent =
+    `${convite.nome} convidou você para a sala ${convite.sala}.`;
+  $('conviteRecebido').hidden = false;
+
+  clearInterval(temporizadorConvite);
+
+  const atualizarContagem = () => {
+    const segundos = Math.max(
+      0,
+      Math.ceil((convite.expiraEm - Date.now()) / 1000)
+    );
+
+    $('conviteContagem').textContent = segundos;
+
+    if (segundos <= 0) fecharConviteRecebido();
+  };
+
+  atualizarContagem();
+  temporizadorConvite = setInterval(atualizarContagem, 250);
+});
+
+function fecharConviteRecebido() {
+  clearInterval(temporizadorConvite);
+  temporizadorConvite = null;
+  conviteAtual = null;
+  $('conviteRecebido').hidden = true;
+}
+
+function aceitarConviteSala() {
+  if (!conviteAtual) return;
+
+  const convite = conviteAtual;
+
+  socket.emit(
+    'responder-convite-sala',
+    { id: convite.id, aceitar: true },
+    (res) => {
+      if (!res?.ok || !res.aceito) {
+        fecharConviteRecebido();
+        alert('Esse convite expirou ou a sala foi encerrada.');
+        return;
+      }
+
+      fecharConviteRecebido();
+      $('room').value = res.sala;
+      join();
+    }
+  );
+}
+
+function recusarConviteSala() {
+  if (!conviteAtual) return;
+
+  socket.emit(
+    'responder-convite-sala',
+    { id: conviteAtual.id, aceitar: false },
+    () => fecharConviteRecebido()
+  );
+}
     const socket = io();
     const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
     const MAX_PESSOAS = 10;
