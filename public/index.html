@@ -1141,6 +1141,23 @@ socket.on('room-sound', (tipo) => {
 
       entrando = true;
 
+            const AudioContextDisponivel = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextDisponivel) {
+        entrando = false;
+        alert('Este navegador não oferece suporte ao áudio da chamada.');
+        return;
+      }
+
+      try {
+        if (!audioCtx) audioCtx = new AudioContextDisponivel();
+        if (audioCtx.state !== 'running') await audioCtx.resume();
+      } catch (erro) {
+        console.error('Não consegui ativar o áudio:', erro);
+        entrando = false;
+        alert('Não consegui iniciar o áudio. Clique em Entrar novamente.');
+        return;
+      }
+
       try {
         const mic = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -1154,12 +1171,13 @@ socket.on('room-sound', (tipo) => {
 
             prepararAudio();
 
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume().catch((erro) => {
+     if (audioCtx.state === 'suspended') {
+        try {
+          await audioCtx.resume();
+        } catch (erro) {
           console.error('Não consegui ativar o áudio:', erro);
-        });
+        }
       }
-
       if (micTrack) criarAnalisador('me', micTrack);
       iniciarLoopFala();
 
@@ -2171,7 +2189,7 @@ function salvarSalaRecente(sala) {
     });
 
     function prepararAudio() {
-      audioCtx = new AudioContext();
+     if (!audioCtx) audioCtx = new AudioContext();
       mixDest = audioCtx.createMediaStreamDestination();
 
       if (micTrack) {
