@@ -572,12 +572,16 @@ socket.on('room-sound-request', (tipo) => {
     }
   });
    socket.on('disconnect', () => {
-    if (socket.data.room)
-    socket.to(room).emit('room-sound', 'sair');{
-      socket.to(socket.data.room).emit('user-left', socket.id);
-    }
-    if (socket.data.chave) avisarStatus(socket.data.chave, socket.id);
-  });
+  const room = socket.data.room;
+
+  if (room) {
+    socket.to(room).emit('room-sound', 'sair');
+    socket.to(room).emit('user-left', socket.id);
+  }
+
+  if (socket.data.chave) {
+    avisarStatus(socket.data.chave, socket.id);
+  }
 });
 
 // Cria a tabela de contas sozinho, se ela ainda não existir
