@@ -700,6 +700,7 @@
       $('previewInicial').textContent = nome.charAt(0);
       $('login').hidden = true;
       $('setup').hidden = false;
+      carregarAvatarSalvo();
       retomarAposAtualizacao();
     }
 
@@ -1238,6 +1239,28 @@
     }
 
     // ===== Foto de perfil (escolhida antes de entrar na sala) =====
+        function carregarAvatarSalvo() {
+      socket.emit('perfil-carregar', (res) => {
+        if (!res || !res.ok) return;
+
+        meuAvatar = res.perfil?.avatar || null;
+        atualizarPreviewAvatar();
+
+        if (meuAvatar) {
+          peers.forEach((p, id) => enviarAvatarPara(id));
+        }
+      });
+    }
+
+    function salvarAvatarNaConta() {
+      if (!meuAvatar || !logado || !socket.connected) return;
+
+      socket.emit('perfil-salvar-avatar', meuAvatar, (res) => {
+        if (!res || !res.ok) {
+          alert('A foto foi selecionada, mas não consegui salvá-la na conta. Tente novamente.');
+        }
+      });
+    }
 
     function escolherAvatar() {
       $('avatarFile').click();
@@ -1293,6 +1316,7 @@
         return;
       }
       atualizarPreviewAvatar();
+            salvarAvatarNaConta();
       peers.forEach((p, id) => enviarAvatarPara(id));
     }
 
