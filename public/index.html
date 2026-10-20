@@ -213,7 +213,17 @@
     .chat-form input { flex: 1; min-width: 0; }
 
     .dica { text-align: center; opacity: .6; font-size: .9rem; margin: 14px 0 0; }
-
+    /* ===== Amigos ===== */
+    #amigosPanel { display: flex; flex-direction: column; gap: 12px; }
+    .lista-amigos { display: flex; flex-direction: column; gap: 8px; }
+    .amigo-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: #3a2a57; }
+    .amigo-item .nome-amigo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bolinha { width: 12px; height: 12px; border-radius: 50%; background: #6b6b6b; flex-shrink: 0; }
+    .bolinha.online { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.8); }
+    .titulo-secao { margin: 8px 0 0; font-size: .9rem; opacity: .8; }
+    .linha-add { display: flex; gap: 8px; }
+    .linha-add input { flex: 1; min-width: 0; }
+    .btn.pequeno { padding: 6px 10px; font-size: .85rem; }
     /* ===== Tela de atualização ===== */
     #atualizacao {
       position: fixed; inset: 0; z-index: 1000;
@@ -342,9 +352,28 @@
     </div>
    
     <button class="btn primary big" onclick="join()">Entrar na sala</button>
+        <button class="btn" onclick="abrirAmigos()">👥 Amigos</button>
     <button class="btn" onclick="sairDaConta()">Sair da conta</button>
   </section>
+  <!-- Amigos (abre pelo botão 👥 Amigos na tela de sala) -->
+  <section id="amigosPanel" class="card" hidden>
+    <div class="linha-add">
+      <input id="inputAmigo" maxlength="20" placeholder="Nome de usuário do amigo" oninput="maiusculo(this)" onkeydown="if (event.key === 'Enter') adicionarAmigo()">
+      <button class="btn primary" onclick="adicionarAmigo()">Adicionar</button>
+    </div>
+    <p id="amigoMsg" class="dica" hidden></p>
 
+    <p class="titulo-secao">Pedidos recebidos</p>
+    <div id="listaPedidos" class="lista-amigos"></div>
+
+    <p class="titulo-secao">Pedidos enviados</p>
+    <div id="listaEnviados" class="lista-amigos"></div>
+
+    <p class="titulo-secao">Meus amigos</p>
+    <div id="listaAmigos" class="lista-amigos"></div>
+
+    <button class="btn" onclick="voltarDeAmigos()">⬅️ Voltar</button>
+  </section>
   <!-- Chamada -->
   <section id="call" hidden>
     <div class="sala-badge">🏠 Sala: <strong id="salaNome"></strong><span class="sep">·</span>⏱️ <strong id="timer" title="Tempo de chamada">00:00</strong></div>
@@ -1916,7 +1945,130 @@
         b.title = cheia ? 'Sair da tela cheia' : 'Tela cheia';
       });
     });
+    // ===== Amigos e bolinha de online =====
 
+    const MOTIVOS_AMIGO = {
+      login: 'Sua sessão expirou. Entre na conta de novo.',
+      nao_existe: 'Esse usuário não existe.',
+      proprio: 'Você não pode adicionar a si mesmo.',
+      ja_amigo: 'Vocês já são amigos.',
+      ja_pedido: 'Já existe um pedido entre vocês.',
+      erro: 'Não foi possível concluir. Tente de novo.',
+    };
+
+    function abrirAmigos() {
+      $('setup').hidden = true;
+      $('amigosPanel').hidden = false;
+      carregarAmigos();
+    }
+
+    function voltarDeAmigos() {
+      $('amigosPanel').hidden = true;
+      $('setup').hidden = false;
+    }
+
+    function avisoAmigos(texto) {
+      $('amigoMsg').textContent = texto;
+      $('amigoMsg').hidden = !texto;
+    }
+
+    function carregarAmigos() {
+      socket.emit('amigos-listar', (res) => {
+        if (!res || !res.ok) return avisoAmigos(MOTIVOS_AMIGO[res && res.motivo] || MOTIVOS_AMIGO.erro);
+
+        preencherLista('listaPedidos', res.recebidos, (item) => [
+          botaoPequeno('Aceitar', () => responderPedido(item.chave, true)),
+          botaoPequeno('Recusar', () => responderPedido(item.chave, false)),
+        ], 'Nenhum pedido recebido.', false);
+
+        preencherLista('listaEnviados', res.enviados, (item) => [
+          botaoPequeno('Cancelar', () => removerAmigo(item.chave)),
+        ], 'Nenhum pedido enviado.', false);
+
+        preencherLista('listaAmigos', res.amigos, (item) => [
+          botaoPequeno('Remover', () => removerAmigo(item.chave)),
+        ], 'Você ainda não tem amigos.', true);
+      });
+    }
+
+    function botaoPequeno(texto, acao) {
+      const b = document.createElement('button');
+      b.className = 'btn pequeno';
+      b.textContent = texto;
+      b.onclick = acao;
+      return b;
+    }
+
+    function preencherLista(idLista, itens, criarBotoes, textoVazio, comBolinha) {
+      const lista = $(idLista);
+      lista.innerHTML = '';
+
+      if (!itens.length) {
+        const vazio = document.createElement('p');
+        vazio.className = 'dica';
+        vazio.style.margin = '0';
+        vazio.textContent = textoVazio;
+        lista.appendChild(vazio);
+        return;
+      }
+
+      itens.forEach((item) => {
+        const linha = document.createElement('div');
+        linha.className = 'amigo-item';
+        linha.dataset.chave = item.chave;
+
+        if (comBolinha) {
+          const bolinha = document.createElement('span');
+          bolinha.className = 'bolinha' + (item.online ? ' online' : '');
+          bolinha.title = item.online ? 'Online' : 'Offline';
+          linha.appendChild(bolinha);
+        }
+
+        const nome = document.createElement('span');
+        nome.className = 'nome-amigo';
+        nome.textContent = item.nome;
+        linha.appendChild(nome);
+
+        criarBotoes(item).forEach((b) => linha.appendChild(b));
+        lista.appendChild(linha);
+      });
+    }
+
+    function adicionarAmigo() {
+      const usuario = $('inputAmigo').value.trim().toUpperCase();
+      if (!usuario) return avisoAmigos('Digite o nome de usuário do amigo.');
+
+      socket.emit('amigo-pedir', usuario, (res) => {
+        if (res && res.ok) {
+          $('inputAmigo').value = '';
+          avisoAmigos(`Pedido enviado para ${res.nome}.`);
+          carregarAmigos();
+        } else {
+          avisoAmigos(MOTIVOS_AMIGO[res && res.motivo] || MOTIVOS_AMIGO.erro);
+        }
+      });
+    }
+
+    function responderPedido(chave, aceitar) {
+      socket.emit('amigo-responder', { usuario: chave, aceitar }, () => carregarAmigos());
+    }
+
+    function removerAmigo(chave) {
+      socket.emit('amigo-remover', chave, () => carregarAmigos());
+    }
+
+    // Muda a bolinha na hora, sem precisar recarregar a lista
+    socket.on('amigo-status', ({ chave, online }) => {
+      const bolinha = document.querySelector(`#listaAmigos [data-chave="${CSS.escape(chave)}"] .bolinha`);
+      if (!bolinha) return;
+      bolinha.classList.toggle('online', online);
+      bolinha.title = online ? 'Online' : 'Offline';
+    });
+
+    // Atualiza a lista de amigos se ela estiver aberta
+    socket.on('amizade-atualizada', () => {
+      if (!$('amigosPanel').hidden) carregarAmigos();
+    });
     // ===== Inicialização e adaptação para celular =====
 
     $('autoLogin').checked = lerPreferenciaAuto();
