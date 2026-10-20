@@ -2,6 +2,101 @@
 <html lang="pt-BR">
 <head>
   <script>
+        function mostrarMensagemServidor(texto) {
+      const aviso = $('servidorMsg');
+      aviso.textContent = texto;
+      aviso.hidden = !texto;
+    }
+
+    function carregarServidores() {
+      socket.emit('servidores-listar', (res) => {
+        if (!res || !res.ok) {
+          mostrarMensagemServidor('Não consegui carregar os servidores.');
+          return;
+        }
+
+        const lista = $('listaServidores');
+        lista.innerHTML = '';
+
+        if (!res.servidores.length) {
+          lista.innerHTML = '<p class="dica">Você ainda não participa de nenhum servidor.</p>';
+          return;
+        }
+
+        res.servidores.forEach((servidor) => {
+          const item = document.createElement('div');
+          item.className = 'amigo-item';
+
+          const nome = document.createElement('span');
+          nome.className = 'nome-amigo';
+          nome.textContent = servidor.nome;
+
+          const convite = document.createElement('small');
+          convite.textContent = `Convite: ${servidor.convite}`;
+
+          const entrar = document.createElement('button');
+          entrar.className = 'btn pequeno';
+          entrar.textContent = 'Selecionar';
+          entrar.onclick = () => {
+            $('room').value = servidor.id;
+            mostrarMensagemServidor(
+              `Servidor "${servidor.nome}" selecionado. Clique em “Entrar na sala” para iniciar a chamada.`
+            );
+          };
+
+          item.append(nome, convite, entrar);
+          lista.appendChild(item);
+        });
+      });
+    }
+
+    function criarServidor() {
+      const nome = $('nomeServidor').value.trim();
+      if (!nome) {
+        mostrarMensagemServidor('Digite um nome para o servidor.');
+        return;
+      }
+
+      socket.emit('servidor-criar', nome, (res) => {
+        if (!res || !res.ok) {
+          mostrarMensagemServidor('Não foi possível criar o servidor.');
+          return;
+        }
+
+        $('nomeServidor').value = '';
+        $('room').value = res.servidor.id;
+        mostrarMensagemServidor(
+          `Servidor criado! Código de convite: ${res.servidor.convite}. Clique em “Entrar na sala” para iniciar a chamada.`
+        );
+        carregarServidores();
+      });
+    }
+
+    function entrarServidorPorConvite() {
+      const convite = $('conviteServidor').value.trim();
+      if (!convite) {
+        mostrarMensagemServidor('Digite o código de convite.');
+        return;
+      }
+
+      socket.emit('servidor-entrar-convite', convite, (res) => {
+        if (!res || !res.ok) {
+          mostrarMensagemServidor(
+            res && res.motivo === 'convite'
+              ? 'Esse código de convite não foi encontrado.'
+              : 'Não consegui entrar no servidor.'
+          );
+          return;
+        }
+
+        $('conviteServidor').value = '';
+        $('room').value = res.servidor.id;
+        mostrarMensagemServidor(
+          `Você entrou em "${res.servidor.nome}". Clique em “Entrar na sala” para iniciar a chamada.`
+        );
+        carregarServidores();
+      });
+    }
   if (navigator.userAgent.includes('Electron')) {
     document.documentElement.classList.add('electron-app');
   }
@@ -343,6 +438,22 @@
   <!-- Escolha da sala (depois do login) -->
   <section id="setup" class="card" hidden>
     <p class="logado">Logado como <strong id="usuarioLogado"></strong></p>
+        <div class="servidores-painel">
+      <h2>Meus servidores</h2>
+
+      <div class="linha-add">
+        <input id="nomeServidor" maxlength="40" placeholder="Nome do servidor">
+        <button class="btn primary" onclick="criarServidor()">Criar</button>
+      </div>
+
+      <div class="linha-add">
+        <input id="conviteServidor" maxlength="8" placeholder="Código de convite">
+        <button class="btn" onclick="entrarServidorPorConvite()">Entrar com convite</button>
+      </div>
+
+      <p id="servidorMsg" class="dica" hidden></p>
+      <div id="listaServidores" class="lista-amigos"></div>
+    </div>
     <label for="room">Nome da sala</label>
     <input id="room" placeholder="ex: BINGO-DA-GALERA" oninput="maiusculo(this)" onkeydown="teclaEntrar(event)">
     <label>Foto de perfil (opcional)</label>
@@ -700,6 +811,7 @@
       $('previewInicial').textContent = nome.charAt(0);
       $('login').hidden = true;
       $('setup').hidden = false;
+      carregarServidores();
       retomarAposAtualizacao();
     }
 
