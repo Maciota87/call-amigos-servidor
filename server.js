@@ -33,7 +33,6 @@ app.use(express.static('public'));
 
 const sessoes = new Map();     // token -> { chave, expira }
 const tentativas = new Map();  // chave -> { falhas, bloqueadoAte }
-const musicasSala = new Map(); // sala -> música tocando
 
 setInterval(() => {
   const agora = Date.now();
@@ -202,13 +201,7 @@ io.on('connection', (socket) => {
         if (outro && outro.data.chave === socket.data.chave) substituidos.push(outro);
       }
     }
-
     substituidos.forEach((outro) => {
-      if (musicasSala.get(chave)?.ownerId === outro.id) {
-        musicasSala.delete(chave);
-        io.to(chave).emit('music-stop');
-      }
-
       outro.leave(chave);
       outro.data.room = null;
       outro.emit('derrubado');
@@ -228,7 +221,6 @@ io.on('connection', (socket) => {
     socket.data.room = chave;
 
     socket.emit('existing-users', outros);
-    socket.emit('music-state', musicasSala.get(chave) || null);
     socket.to(chave).emit('user-joined', { id: socket.id, name: socket.data.nome });
     reply({ ok: true });
   });
@@ -244,30 +236,6 @@ io.on('connection', (socket) => {
     if (!sala || !sala.has(to)) return;
 
     io.to(to).emit('signal', { from: socket.id, data });
-  });
-
-  // ===== Música da sala =====
-  socket.on('music-play', (dados) => {
-    const chave = socket.data.room;
-    if (!chave || !dados || typeof dados.title !== 'string') return;
-
-    const musica = {
-      title: dados.title.trim().slice(0, 160) || 'Música',
-      artist: String(dados.artist || '').slice(0, 100),
-      ownerId: socket.id,
-      startedAt: Date.now(),
-    };
-
-    musicasSala.set(chave, musica);
-    socket.to(chave).emit('music-play', musica);
-  });
-
-  socket.on('music-stop', () => {
-    const chave = socket.data.room;
-    if (!chave) return;
-
-    musicasSala.delete(chave);
-    io.to(chave).emit('music-stop');
   });
 
   // ===== Chat de texto =====
@@ -296,17 +264,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     if (socket.data.room) {
-      const chave = socket.data.room;
-
-      if (musicasSala.get(chave)?.ownerId === socket.id) {
-        musicasSala.delete(chave);
-        socket.to(chave).emit('music-stop');
-      }
-
-      socket.to(chave).emit('user-left', socket.id);
-
-      const sala = io.sockets.adapter.rooms.get(chave);
-      if (!sala || sala.size === 0) musicasSala.delete(chave);
+      socket.to(socket.data.room).emit('user-left', socket.id);
     }
   });
 });
