@@ -498,6 +498,7 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    const socket = io();
     let conviteAtual = null;
 let temporizadorConvite = null;
 
@@ -623,7 +624,6 @@ function recusarConviteSala() {
     () => fecharConviteRecebido()
   );
 }
-    const socket = io();
     const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
     const MAX_PESSOAS = 10;
     const FPS_ALVO = 60;
