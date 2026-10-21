@@ -537,7 +537,68 @@ body:has(#call:not([hidden])) .downloads {
       border-radius: 999px; background: #22c55e; color: #0b2e17; font-size: 12px; font-weight: 500; padding: 0 6px;
     }
 
-       
+     /* ===== Celular (até 700px). O computador não é afetado. ===== */
+    @media (max-width: 700px) {
+      input, select, textarea { font-size: 16px; }
+
+      .btn { min-height: 44px; }
+      .mini { min-height: 32px; padding: 6px 10px; font-size: 14px; }
+      .sel-res { font-size: 13px; min-height: 32px; }
+      .sl-tela { width: 70px; }
+
+      .card { width: calc(100% - 24px); max-width: none; margin: 12px auto; padding: 18px; }
+      .logo-img { width: 56px; }
+      h1 { font-size: 1.7rem; }
+      .sub { font-size: .85rem; }
+
+      .sala-badge { font-size: 13px; padding: 6px 14px; max-width: calc(100% - 16px); }
+      .sala-badge .sep { display: none; }
+      #status { display: none; }
+
+      #call { padding: 0 8px 12px; }
+      #grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        min-height: 0;
+        padding: 6px 0;
+      }
+      .tile { aspect-ratio: 4 / 3; border-radius: 14px; }
+      .tile.focus { grid-column: 1 / -1; height: 42vh; aspect-ratio: auto; }
+      .tile .nome { font-size: 12px; padding: 3px 7px; max-width: 60%; }
+      .tile:not(.focus) .pct,
+      .tile:not(.focus) [data-acao="menos"],
+      .tile:not(.focus) [data-acao="mais"] { display: none; }
+      .tile:not(.focus) .avatar-circ { width: 48%; font-size: 1.3rem; }
+      .tile .topo { top: 6px; left: 6px; right: 6px; }
+      .tile .rodape { bottom: 6px; left: 6px; right: 6px; }
+
+      #controls {
+        position: sticky;
+        bottom: 0;
+        width: 100%;
+        max-width: none;
+        margin: 8px 0 0;
+        padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+        border-radius: 16px 16px 0 0;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        gap: 8px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      #controls::-webkit-scrollbar { display: none; }
+      #controls .btn { white-space: nowrap; flex-shrink: 0; }
+      .grupo-controles { flex-wrap: nowrap; width: auto; gap: 6px; flex-shrink: 0; }
+      .split { flex-shrink: 0; }
+      .separador-controles { display: none; }
+
+      .menu { bottom: 96px; max-height: 50vh; }
+      #call > .dica { display: none; }
+      #chatPanel { height: 70vh; }
+      #shareBtn.sem-suporte { opacity: .8; }
+    }      
     
   </style>
 </head>
